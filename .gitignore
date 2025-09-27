@@ -31,3 +31,5 @@ $RECYCLE.BIN/
 
 .venv/
 .env
+
+serviceAccountKey.json/
