@@ -5,11 +5,16 @@ import jwt
 from datetime import datetime
 import os
 from dotenv import load_dotenv
+import webbrowser
+from streamlit.components.v1 import html
 
 load_dotenv()
 
 # Flask 서버 기본 URL
 FLASK_SERVER_URL = "http://localhost:5000"
+
+# Firebase 호스팅된 인증 페이지 URL (✅ 실제 URL로 수정)
+FIREBASE_AUTH_URL = "https://jeohyeonweb.web.app"
 
 # Streamlit 세션 상태 초기화
 if 'auth_token' not in st.session_state:
@@ -55,79 +60,76 @@ def verify_token(token):
         st.session_state.user_info = None
         return None
 
-# ✅ 수정: handle_login_callback 함수 정의
+# ✅ 중요: handle_login_callback 함수를 실제 Flask 통신으로 변경
 def handle_login_callback(id_token):
-    """테스트용: 입력받은 토큰을 세션에 저장"""
-    st.session_state.auth_token = id_token
-    # 테스트용 사용자 정보 설정
-    st.session_state.user_info = {
-        'email': 'test_student@jeohyeon.hs.kr',
-        'display_name': '테스트학생',
-        'role': 'student',
-        'honyangi': 100
-    }
-    st.rerun()
+    """Flask 서버로 ID 토큰을 전송하여 실제 로그인 처리"""
+    response = make_flask_request('/api/login', 'POST', {'id_token': id_token})
+    if response and response.status_code == 200:
+        data = response.json()
+        st.session_state.auth_token = data['access_token']
+        st.session_state.user_info = data['user']
+        st.success("✅ 로그인 성공!")
+        st.rerun()
+    else:
+        error_msg = response.json().get('message', '로그인 실패') if response else '서버 연결 실패'
+        st.error(f"❌ 로그인 실패: {error_msg}")
 
 def show_login_page():
-    st.title("🏫 학교 웹사이트 로그인 (개발자 테스트 모드)")
-    st.warning("""
-    Firebase 로그인 팝업이 현재 환경에서 지원되지 않습니다.
-    대체 수단을 이용해 주세요.
-    """)
+    st.title("🏫 학교 웹사이트 로그인")
+    st.write("학교 구글 계정(@jeohyeon.hs.kr)으로 로그인해 주세요.")
 
-    # 방법 1: 수동 토큰 입력 (테스트용)
-    st.subheader("방법 1: 수동 토큰 입력 (테스트용)")
-    st.info("아무 문자열이나 입력하면 테스트용 계정으로 로그인됩니다.")
+    # 로그인 버튼
+    if st.button("Google로 로그인", key="hosted_login"):
+        # 새 팝업 창으로 Firebase 호스팅 인증 페이지 열기
+        webbrowser.open_new(FIREBASE_AUTH_URL)
+        st.info("로그인 팝업창이 열립니다. 로그인 완료 후 이 창으로 돌아오세요.")
 
-    # st.chat_input을 사용하여 토큰 입력받기
-    id_token = st.chat_input("여기에 임의의 토큰을 입력하고 Enter를 누르세요...")
-    if id_token:
-        handle_login_callback(id_token)
-
-    # 방법 2: 테스트용 사용자 생성 버튼 (선택사항)
-    st.subheader("방법 2: 테스트용 계정 생성")
-    st.info("로그인 흐름만 테스트하려면 아래 버튼으로 가상 사용자를 생성하세요. (Firebase 연동 없음)")
-    
-    if st.button("테스트 학생 계정으로 로그인"):
-        st.session_state.auth_token = "test-token-student"
-        st.session_state.user_info = {
-            'email': 'test_student@jeohyeon.hs.kr',
-            'display_name': '테스트학생',
-            'role': 'student',
-            'honyangi': 100
-        }
-        st.rerun()
-    
-    if st.button("테스트 관리자 계정으로 로그인"):
-        st.session_state.auth_token = "test-token-admin"
-        st.session_state.user_info = {
-            'email': 'test_admin@jeohyeon.hs.kr',
-            'display_name': '테스트관리자',
-            'role': 'admin',
-            'honyangi': 500
-        }
-        st.rerun()
-    
-    # ✅ 최신 API 적용
-    token_param = st.query_params.get('token', None)
-    if token_param and not st.session_state.auth_token:
-        id_token = token_param if isinstance(token_param, str) else token_param[0]
-        response = make_flask_request('/api/login', 'POST', {'id_token': id_token})
+    # ✅ 개선된 JavaScript 메시지 처리
+    auth_js = """
+    <script>
+        // Firebase 호스팅 페이지에서 전송된 메시지 수신
+        window.addEventListener('message', function(event) {
+            // 메시지 출처 검증 (보안 강화)
+            if (event.origin !== "https://jeohyeonweb.web.app") {
+                console.log('Untrusted origin:', event.origin);
+                return;
+            }
+            
+            if (event.data.type === 'FIREBASE_ID_TOKEN') {
+                console.log('Received token from auth page');
+                // Streamlit의 set_query_params를 통해 토큰 전달
+                const url = new URL(window.location);
+                url.searchParams.set('token', event.data.token);
+                window.history.replaceState({}, '', url);
+                
+                // Streamlit에 리로드 신호 전송
+                window.dispatchEvent(new Event('tokenReceived'));
+            }
+        });
         
-        if response and response.status_code == 200:
-            data = response.json()
-            st.session_state.auth_token = data['access_token']
-            st.session_state.user_info = data['user']
-            st.query_params.clear()  # URL 정리
-            st.rerun()
-        else:
-            error_msg = response.json().get('message', '로그인 실패') if response else '서버 연결 실패'
-            st.error(f"로그인 실패: {error_msg}")
+        // 리로드 이벤트 리스너
+        window.addEventListener('tokenReceived', function() {
+            // Streamlit의 rerun을 트리거하기 위해 URL 변경 감지
+            window.location.reload();
+        });
+    </script>
+    """
+    html(auth_js, height=0)
+
+    # 쿼리 파라미터에서 토큰 처리
+    if 'token' in st.query_params and not st.session_state.auth_token:
+        id_token = st.query_params['token']
+        st.write("🔐 토큰을 받았습니다. 로그인 처리 중...")
+        handle_login_callback(id_token)
+        # ✅ 중요: 토큰 사용 후 쿼리 파라미터 제거 (보안)
+        st.query_params.clear()
 
 def show_main_page():
+    """메인 페이지 표시"""
     token = st.session_state.auth_token
     user_info = st.session_state.user_info
     
+    # 상단 바
     col1, col2 = st.columns([4, 1])
     with col1:
         st.title(f"👋 {user_info['display_name']}님, 환영합니다!")
@@ -139,6 +141,8 @@ def show_main_page():
             st.rerun()
     
     st.divider()
+    
+    # 역할별 기능 표시
     show_student_features(token, user_info)
     
     if user_info['role'] in ['manager', 'admin']:
@@ -149,9 +153,96 @@ def show_main_page():
         st.divider()
         show_admin_features(token, user_info)
 
-# (학생/부장/관리자 기능 함수들은 기존과 동일)
+def show_student_features(token, user_info):
+    """학생 기능 표시"""
+    st.header("📝 학생 메뉴")
+    
+    with st.form("profile_form"):
+        st.subheader("프로필 이름 수정")
+        new_name = st.text_input("표시 이름", value=user_info.get('display_name', ''))
+        submitted = st.form_submit_button("이름 변경")
+        
+        if submitted:
+            if new_name.strip():
+                response = make_flask_request('/api/profile', 'POST', {'display_name': new_name.strip()}, token)
+                if response and response.status_code == 200:
+                    st.session_state.user_info['display_name'] = new_name.strip()
+                    st.success("✅ 이름이 성공적으로 변경되었습니다!")
+                    st.rerun()
+                else:
+                    st.error("❌ 이름 변경에 실패했습니다.")
+            else:
+                st.warning("⚠️ 이름을 입력해주세요.")
+
+def show_manager_features(token, user_info):
+    """부장 기능 표시"""
+    st.header("💰 부장 메뉴 - 호냥이 관리")
+    
+    with st.form("honyangi_form"):
+        st.subheader("호냥이 지급/차감")
+        target_email = st.text_input("대상 학생 이메일", placeholder="2411224@jeohyeon.hs.kr")
+        amount = st.number_input("변경 금액 (음수 입력 시 차감)", min_value=-1000, max_value=1000, value=0, step=10)
+        submitted = st.form_submit_button("호냥이 적용")
+        
+        if submitted:
+            if not target_email:
+                st.error("❌ 대상 이메일을 입력하세요.")
+            elif amount == 0:
+                st.warning("⚠️ 0 이외의 금액을 입력하세요.")
+            else:
+                response = make_flask_request('/api/honyangi', 'POST', {
+                    'target_email': target_email, 
+                    'amount': amount
+                }, token)
+                
+                if response and response.status_code == 200:
+                    st.success(f"✅ {response.json().get('message')}")
+                else:
+                    error_msg = response.json().get('message', '처리 실패') if response else '서버 연결 실패'
+                    st.error(f"❌ 호냥이 변경 실패: {error_msg}")
+
+def show_admin_features(token, user_info):
+    """관리자 기능 표시"""
+    st.header("⚙️ 관리자 메뉴 - 사용자 권한 관리")
+    
+    # 사용자 목록 조회
+    if st.button("사용자 목록 새로고침"):
+        response = make_flask_request('/api/users', 'GET', token=token)
+        if response and response.status_code == 200:
+            users_data = response.json().get('users', [])
+            st.session_state.admin_users = users_data
+    
+    if 'admin_users' in st.session_state:
+        st.subheader("전체 사용자 목록")
+        for user in st.session_state.admin_users:
+            with st.expander(f"{user.get('display_name', '이름 없음')} ({user.get('email', '이메일 없음')})"):
+                st.write(f"역할: {user.get('role', 'student')}")
+                st.write(f"호냥이: {user.get('honyangi', 0)}")
+    
+    # 역할 변경
+    with st.form("role_form"):
+        st.subheader("사용자 역할 변경")
+        target_email = st.text_input("대상 사용자 이메일", placeholder="2411224@jeohyeon.hs.kr")
+        new_role = st.selectbox("새로운 역할", ["student", "manager", "admin"])
+        submitted = st.form_submit_button("역할 변경")
+        
+        if submitted:
+            if not target_email:
+                st.error("❌ 대상 이메일을 입력하세요.")
+            else:
+                response = make_flask_request('/api/role', 'POST', {
+                    'target_email': target_email, 
+                    'new_role': new_role
+                }, token)
+                
+                if response and response.status_code == 200:
+                    st.success(f"✅ {response.json().get('message')}")
+                else:
+                    error_msg = response.json().get('message', '처리 실패') if response else '서버 연결 실패'
+                    st.error(f"❌ 역할 변경 실패: {error_msg}")
 
 def main():
+    """메인 앱 함수"""
     st.set_page_config(
         page_title="학교 웹사이트", 
         page_icon="🏫", 
@@ -159,6 +250,7 @@ def main():
         initial_sidebar_state="collapsed"
     )
     
+    # 토큰 검증
     if st.session_state.auth_token:
         user_data = verify_token(st.session_state.auth_token)
         if user_data:

@@ -1,4 +1,5 @@
 # flask_auth_server.py
+from flask_cors import CORS  # pip install flask-cors
 from flask import Flask, request, jsonify, session, redirect, url_for
 import firebase_admin
 from firebase_admin import credentials, auth, firestore
@@ -12,6 +13,7 @@ load_dotenv()
 
 # Flask 앱 생성 (가장 먼저 정의)
 app = Flask(__name__)
+CORS(app, origins=["http://localhost:8501", "https://jeohyeonweb.web.app"])  # ✅ CORS 추가
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'fallback-secret-key-for-development')
 
 # Firebase Admin SDK 초기화

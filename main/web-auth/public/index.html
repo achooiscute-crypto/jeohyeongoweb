@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>로그인 - 학교 웹사이트</title>
+    <!-- Firebase SDK 추가 -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <style>
+      body {
+        font-family: "Malgun Gothic", sans-serif;
+        text-align: center;
+        padding: 50px;
+      }
+      button {
+        padding: 15px 30px;
+        font-size: 16px;
+        cursor: pointer;
+        margin-top: 20px;
+      }
+      #message {
+        margin-top: 20px;
+        color: #666;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>학교 웹사이트 로그인</h1>
+    <p>Google 계정으로 로그인해 주세요.</p>
+    <button onclick="signInWithGoogle()">Google로 로그인</button>
+    <div id="message"></div>
+
+    <script>
+      // Firebase 구성 정보 ( .env 파일과 동일한 값으로 대체해야 합니다)
+      const firebaseConfig = {
+        apiKey: "AIzaSyAYPVS5aoZLtjJW966Z6b60y75fSJgiTow",
+        authDomain: "jeohyeonweb.firebaseapp.com",
+        projectId: "jeohyeonweb",
+        storageBucket: "jeohyeonweb.firebasestorage.app",
+        messagingSenderId: "865403260673",
+        appId: "1:865403260673:web:ec6c31ba874bf1787dd500",
+      };
+
+      // Firebase 초기화
+      firebase.initializeApp(firebaseConfig);
+      const auth = firebase.auth();
+
+      // 인증 상태 지속성을 'session'으로 설정:cite[7]
+      firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION);
+
+      // Google 로그인 함수:cite[1]:cite[8]
+      function signInWithGoogle() {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        // 학교 도메인 제한 적용
+        provider.setCustomParameters({ hd: "jeohyeon.hs.kr" });
+
+        document.getElementById("message").textContent = "로그인 중...";
+
+        auth
+          .signInWithPopup(provider)
+          .then((result) => {
+            // 로그인 성공, ID 토큰 획득
+            return result.user.getIdToken();
+          })
+          .then((idToken) => {
+            document.getElementById("message").textContent =
+              "로그인 성공! 창을 닫아주세요.";
+            // 부모 창(Streamlit 앱)에 토큰 전송
+            if (window.opener) {
+              window.opener.postMessage(
+                { type: "FIREBASE_ID_TOKEN", token: idToken },
+                "*"
+              );
+              // 몇 초 후 자동으로 창 닫기 (선택사항)
+              setTimeout(() => window.close(), 1500);
+            } else {
+              document.getElementById("message").textContent =
+                "토큰: " + idToken;
+            }
+          })
+          .catch((error) => {
+            console.error("로그인 오류:", error);
+            document.getElementById("message").textContent =
+              "로그인 실패: " + error.message;
+          });
+      }
+    </script>
+  </body>
+</html>
