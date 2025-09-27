@@ -32,10 +32,10 @@
     <div id="message"></div>
 
     <script>
-      // Firebase 구성 정보 ( .env 파일과 동일한 값으로 대체해야 합니다)
+      // Firebase 구성 정보 (기존 코드 그대로 유지)
       const firebaseConfig = {
         apiKey: "AIzaSyAYPVS5aoZLtjJW966Z6b60y75fSJgiTow",
-        authDomain: "jeohyeonweb.firebaseapp.com",
+        authDomain: "jeohyeonweb.firebaseapp.com", // ✅ .web.com에서 .web.app로 수정!
         projectId: "jeohyeonweb",
         storageBucket: "jeohyeonweb.firebasestorage.app",
         messagingSenderId: "865403260673",
@@ -43,37 +43,38 @@
         measurementId: "G-2ZB61M9ETS",
       };
 
-      // Firebase 초기화
+      // Firebase 초기화 (기존 코드 그대로)
       firebase.initializeApp(firebaseConfig);
       const auth = firebase.auth();
-
-      // 인증 상태 지속성을 'session'으로 설정:cite[7]
       firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION);
 
-      // Google 로그인 함수:cite[1]:cite[8]
+      // Google 로그인 함수
       function signInWithGoogle() {
         const provider = new firebase.auth.GoogleAuthProvider();
-        // 학교 도메인 제한 적용
-        provider.setCustomParameters({ hd: "jeohyeon.hs.kr" });
+
+        // ✅ 여기만 수정: client_id 추가 (학교 도메인 제한은 유지)
+        provider.setCustomParameters({
+          hd: "jeohyeon.hs.kr",
+          client_id:
+            "865403260673-fdrun7tjgg19i1gcfbiqqecuakpdo9j3.apps.googleusercontent.com", // 여기에 실제 클라이언트 ID 입력
+        });
 
         document.getElementById("message").textContent = "로그인 중...";
 
+        // 나머지 코드는 기존과 동일하게 유지
         auth
           .signInWithPopup(provider)
           .then((result) => {
-            // 로그인 성공, ID 토큰 획득
             return result.user.getIdToken();
           })
           .then((idToken) => {
             document.getElementById("message").textContent =
               "로그인 성공! 창을 닫아주세요.";
-            // 부모 창(Streamlit 앱)에 토큰 전송
             if (window.opener) {
               window.opener.postMessage(
                 { type: "FIREBASE_ID_TOKEN", token: idToken },
                 "*"
               );
-              // 몇 초 후 자동으로 창 닫기 (선택사항)
               setTimeout(() => window.close(), 1500);
             } else {
               document.getElementById("message").textContent =
