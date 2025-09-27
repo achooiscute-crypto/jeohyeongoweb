@@ -12,7 +12,7 @@ if not firebase_admin._apps:
         # 옵션 1: 서비스 계정 키 JSON 파일 사용 (권장)
         cred = credentials.Certificate("../serviceAccountKey.json")
     except FileNotFoundError:
-        # 옵션 2: 환경 변수를 사용한 초기화 (승인된 도메인이 설정되어야 함)
+        # 옵션 2: 환경 변수를 사용한 초기화 사실 여기는 별의미는 없습니다.
         cred = credentials.ApplicationDefault()
     firebase_admin.initialize_app(cred)
 
