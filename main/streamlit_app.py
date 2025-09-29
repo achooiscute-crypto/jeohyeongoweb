@@ -14,7 +14,7 @@ load_dotenv()
 FLASK_SERVER_URL = "http://localhost:5000"
 
 # Firebase 호스팅된 인증 페이지 URL (✅ 실제 URL로 수정)
-FIREBASE_AUTH_URL = "https://jeohyeonweb.web.app"
+FIREBASE_AUTH_URL = "https://jeohyeonweb.firebaseapp.com"
 
 # Streamlit 세션 상태 초기화
 if 'auth_token' not in st.session_state:
@@ -75,54 +75,106 @@ def handle_login_callback(id_token):
         st.error(f"❌ 로그인 실패: {error_msg}")
 
 def show_login_page():
-    st.title("🏫 학교 웹사이트 로그인")
-    st.write("학교 구글 계정(@jeohyeon.hs.kr)으로 로그인해 주세요.")
-
-    # 로그인 버튼
-    if st.button("Google로 로그인", key="hosted_login"):
-        # 새 팝업 창으로 Firebase 호스팅 인증 페이지 열기
-        webbrowser.open_new(FIREBASE_AUTH_URL)
-        st.info("로그인 팝업창이 열립니다. 로그인 완료 후 이 창으로 돌아오세요.")
-
-    # ✅ 개선된 JavaScript 메시지 처리
-    auth_js = """
-    <script>
-        // Firebase 호스팅 페이지에서 전송된 메시지 수신
-        window.addEventListener('message', function(event) {
-            // 메시지 출처 검증 (보안 강화)
-            if (event.origin !== "https://jeohyeonweb.web.app") {
-                console.log('Untrusted origin:', event.origin);
-                return;
-            }
-            
-            if (event.data.type === 'FIREBASE_ID_TOKEN') {
-                console.log('Received token from auth page');
-                // Streamlit의 set_query_params를 통해 토큰 전달
-                const url = new URL(window.location);
-                url.searchParams.set('token', event.data.token);
-                window.history.replaceState({}, '', url);
-                
-                // Streamlit에 리로드 신호 전송
-                window.dispatchEvent(new Event('tokenReceived'));
-            }
-        });
-        
-        // 리로드 이벤트 리스너
-        window.addEventListener('tokenReceived', function() {
-            // Streamlit의 rerun을 트리거하기 위해 URL 변경 감지
-            window.location.reload();
-        });
-    </script>
-    """
-    html(auth_js, height=0)
-
-    # 쿼리 파라미터에서 토큰 처리
+    st.title("🏫 학교 웹사이트")
+    
+    # ✅ 쿼리 파라미터에서 토큰 자동 처리
     if 'token' in st.query_params and not st.session_state.auth_token:
         id_token = st.query_params['token']
-        st.write("🔐 토큰을 받았습니다. 로그인 처리 중...")
         handle_login_callback(id_token)
-        # ✅ 중요: 토큰 사용 후 쿼리 파라미터 제거 (보안)
-        st.query_params.clear()
+        return
+
+    if not st.session_state.auth_token:
+        st.success("학교 구글 계정(@jeohyeon.hs.kr)으로 로그인해 주세요.")
+        
+        # ✅ 간결한 로그인 UI
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            st.subheader("로그인")
+            if st.button("🚪 **Google 로그인**", 
+                        type="primary", 
+                        use_container_width=True,
+                        key="main_login"):
+                webbrowser.open_new(FIREBASE_AUTH_URL)
+                st.info("로그인 페이지가 열렸습니다. 로그인을 완료해주세요.")
+        
+        with col2:
+            st.subheader("도움말")
+            st.markdown("""
+            - 학교 구글 계정만 로그인 가능합니다
+            - 로그인 후 자동으로 이동합니다
+            - 문제 발생 시 수동 로그인을 이용하세요
+            """)
+
+        # ✅ 간소화된 수동 로그인
+        with st.expander("🛠️ 수동 로그인 (문제 발생 시)"):
+            manual_token = st.text_area("토큰을 여기에 붙여넣으세요", height=80)
+            if st.button("🔐 수동 로그인", use_container_width=True):
+                if manual_token.strip():
+                    handle_login_callback(manual_token.strip())
+                else:
+                    st.warning("토큰을 입력해주세요.")
+
+        # JavaScript 메시지 처리
+        auth_js = """
+        <script>
+        window.addEventListener('message', function(event) {
+            if (event.origin === "https://jeohyeonweb.firebaseapp.com" && 
+                event.data.type === 'FIREBASE_ID_TOKEN') {
+                window.location.href = 'http://localhost:8501?token=' + encodeURIComponent(event.data.token);
+            }
+        });
+        </script>
+        """
+        html(auth_js, height=0)
+
+     # ✅ 쿼리 파라미터에서 토큰 자동 처리
+    if 'token' in st.query_params and not st.session_state.auth_token:
+        id_token = st.query_params['token']
+        st.info("🔐 토큰을 받았습니다. 로그인 처리 중...")
+        
+        # Flask 서버로 토큰 검증 요청
+        response = make_flask_request('/api/login', 'POST', {'id_token': id_token})
+        
+        if response and response.status_code == 200:
+            data = response.json()
+            st.session_state.auth_token = data['access_token']
+            st.session_state.user_info = data['user']
+            st.query_params.clear()  # 토큰 제거
+            st.rerun()
+        else:
+            error_msg = response.json().get('message', '로그인 실패') if response else '서버 연결 실패'
+            st.error(f"❌ 로그인 실패: {error_msg}")
+
+    # 로그인 안내 UI
+    if not st.session_state.auth_token:
+        st.write("학교 구글 계정(@jeohyeon.hs.kr)으로 로그인해 주세요.")
+        
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.subheader("로그인 방법")
+            st.markdown("""
+            1. 아래 버튼을 클릭하여 로그인 페이지를 엽니다
+            2. Google 계정으로 로그인합니다
+            3. 로그인 성공 후 자동으로 이 페이지로 돌아옵니다
+            """)
+        
+        with col2:
+            if st.button("🚪 로그인 페이지 열기", type="primary"):
+                webbrowser.open_new("https://jeohyeonweb.firebaseapp.com")
+                st.info("로그인 페이지가 새 창에서 열립니다. 로그인 후 이 페이지로 돌아오세요.")
+
+        # 수동 토큰 입력 (백업 방법)
+        with st.expander("🔧 수동 토큰 입력 (자동 로그인 실패 시)"):
+            manual_token = st.text_area("토큰을 여기에 붙여넣으세요", height=100)
+            if st.button("수동 로그인"):
+                if manual_token:
+                    response = make_flask_request('/api/login', 'POST', {'id_token': manual_token})
+                    if response and response.status_code == 200:
+                        data = response.json()
+                        st.session_state.auth_token = data['access_token']
+                        st.session_state.user_info = data['user']
+                        st.rerun()
 
 def show_main_page():
     """메인 페이지 표시"""
@@ -157,32 +209,47 @@ def show_student_features(token, user_info):
     """학생 기능 표시"""
     st.header("📝 학생 메뉴")
     
-    with st.form("profile_form"):
-        st.subheader("프로필 이름 수정")
-        new_name = st.text_input("표시 이름", value=user_info.get('display_name', ''))
-        submitted = st.form_submit_button("이름 변경")
-        
-        if submitted:
-            if new_name.strip():
-                response = make_flask_request('/api/profile', 'POST', {'display_name': new_name.strip()}, token)
-                if response and response.status_code == 200:
-                    st.session_state.user_info['display_name'] = new_name.strip()
-                    st.success("✅ 이름이 성공적으로 변경되었습니다!")
-                    st.rerun()
-                else:
-                    st.error("❌ 이름 변경에 실패했습니다.")
-            else:
-                st.warning("⚠️ 이름을 입력해주세요.")
-
+    # 호냥이 잔액 카드 표시
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("💰 보유 호냥이", f"{user_info.get('honyangi', 0)} 호냥")
+    with col2:
+        st.metric("🎯 역할", user_info['role'])
+    with col3:
+        st.metric("📧 이메일", user_info['email'])
+    
+    # ✅ 프로필 이름 수정 기능 제거 - 대신 현재 정보 표시
+    with st.expander("👤 내 프로필 정보"):
+        st.write(f"**표시 이름:** {user_info.get('display_name', '이름 없음')}")
+        st.write(f"**이메일:** {user_info['email']}")
+        st.write(f"**가입일:** {user_info.get('created_at', '알 수 없음')}")
+    
+    # 호냥이 내역 조회 (간단한 버전)
+    with st.expander("📊 호냥이 사용 내역"):
+        st.info("호냥이 내역 기능은 추후 구현 예정입니다.")
 def show_manager_features(token, user_info):
     """부장 기능 표시"""
     st.header("💰 부장 메뉴 - 호냥이 관리")
     
     with st.form("honyangi_form"):
         st.subheader("호냥이 지급/차감")
+        
+        # 대상 사용자 선택 (관리자인 경우 모든 사용자, 부장인 경우 학생만)
         target_email = st.text_input("대상 학생 이메일", placeholder="2411224@jeohyeon.hs.kr")
-        amount = st.number_input("변경 금액 (음수 입력 시 차감)", min_value=-1000, max_value=1000, value=0, step=10)
-        submitted = st.form_submit_button("호냥이 적용")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            amount = st.number_input("변경 금액", min_value=-1000, max_value=1000, value=10, step=10)
+        with col2:
+            st.write("**작업 유형**")
+            if amount > 0:
+                st.success(f"🎁 {amount} 호냥이 지급")
+            elif amount < 0:
+                st.error(f"⚠️ {abs(amount)} 호냥이 차감")
+            else:
+                st.info("🔁 금액을 입력하세요")
+        
+        submitted = st.form_submit_button("✅ 호냥이 적용")
         
         if submitted:
             if not target_email:
@@ -190,56 +257,127 @@ def show_manager_features(token, user_info):
             elif amount == 0:
                 st.warning("⚠️ 0 이외의 금액을 입력하세요.")
             else:
-                response = make_flask_request('/api/honyangi', 'POST', {
-                    'target_email': target_email, 
-                    'amount': amount
-                }, token)
-                
-                if response and response.status_code == 200:
-                    st.success(f"✅ {response.json().get('message')}")
-                else:
-                    error_msg = response.json().get('message', '처리 실패') if response else '서버 연결 실패'
-                    st.error(f"❌ 호냥이 변경 실패: {error_msg}")
-
+                with st.spinner("호냥이 변경 중..."):
+                    response = make_flask_request('/api/honyangi', 'POST', {
+                        'target_email': target_email, 
+                        'amount': amount
+                    }, token)
+                    
+                    if response and response.status_code == 200:
+                        st.success(f"✅ {response.json().get('message')}")
+                        
+                        # 현재 사용자 정보 갱신 (만약 자신에게 적용한 경우)
+                        if target_email == user_info['email']:
+                            profile_response = make_flask_request('/api/profile', 'GET', token=token)
+                            if profile_response and profile_response.status_code == 200:
+                                st.session_state.user_info = profile_response.json().get('user', user_info)
+                                st.rerun()
+                    else:
+                        error_msg = response.json().get('message', '처리 실패') if response else '서버 연결 실패'
+                        st.error(f"❌ 호냥이 변경 실패: {error_msg}")
+                        
 def show_admin_features(token, user_info):
     """관리자 기능 표시"""
-    st.header("⚙️ 관리자 메뉴 - 사용자 권한 관리")
+    st.header("⚙️ 관리자 메뉴")
     
-    # 사용자 목록 조회
-    if st.button("사용자 목록 새로고침"):
+    # ✅ 즉시 사용자 목록 로드
+    if 'admin_users' not in st.session_state:
         response = make_flask_request('/api/users', 'GET', token=token)
         if response and response.status_code == 200:
-            users_data = response.json().get('users', [])
-            st.session_state.admin_users = users_data
+            st.session_state.admin_users = response.json().get('users', [])
     
-    if 'admin_users' in st.session_state:
-        st.subheader("전체 사용자 목록")
+    # 사용자 관리 섹션
+    st.subheader("👥 사용자 관리")
+    
+    if 'admin_users' in st.session_state and st.session_state.admin_users:
+        # 사용자 목록 테이블
+        users_for_display = []
         for user in st.session_state.admin_users:
-            with st.expander(f"{user.get('display_name', '이름 없음')} ({user.get('email', '이메일 없음')})"):
-                st.write(f"역할: {user.get('role', 'student')}")
-                st.write(f"호냥이: {user.get('honyangi', 0)}")
-    
-    # 역할 변경
-    with st.form("role_form"):
-        st.subheader("사용자 역할 변경")
-        target_email = st.text_input("대상 사용자 이메일", placeholder="2411224@jeohyeon.hs.kr")
-        new_role = st.selectbox("새로운 역할", ["student", "manager", "admin"])
-        submitted = st.form_submit_button("역할 변경")
+            users_for_display.append({
+                '이메일': user.get('email', '이메일 없음'),
+                '이름': user.get('display_name', '이름 없음'),
+                '역할': user.get('role', 'student'),
+                '호냥이': user.get('honyangi', 0)
+            })
         
-        if submitted:
-            if not target_email:
-                st.error("❌ 대상 이메일을 입력하세요.")
-            else:
-                response = make_flask_request('/api/role', 'POST', {
-                    'target_email': target_email, 
-                    'new_role': new_role
-                }, token)
-                
-                if response and response.status_code == 200:
-                    st.success(f"✅ {response.json().get('message')}")
-                else:
-                    error_msg = response.json().get('message', '처리 실패') if response else '서버 연결 실패'
-                    st.error(f"❌ 역할 변경 실패: {error_msg}")
+        st.dataframe(users_for_display, use_container_width=True)
+        
+        # ✅ 빠른 역할 변경
+        st.subheader("🔄 빠른 역할 변경")
+        col1, col2, col3 = st.columns([2, 1, 1])
+        
+        with col1:
+            selected_user = st.selectbox(
+                "대상 사용자 선택",
+                options=[user['이메일'] for user in users_for_display],
+                key="user_select"
+            )
+        
+        with col2:
+            new_role = st.selectbox("새로운 역할", ["student", "manager", "admin"], key="role_select")
+        
+        with col3:
+            st.write("")  # 공백
+            st.write("")  # 공백
+            if st.button("🚀 역할 변경", type="primary", use_container_width=True):
+                if selected_user:
+                    with st.spinner("역할 변경 중..."):
+                        response = make_flask_request('/api/role', 'POST', {
+                            'target_email': selected_user, 
+                            'new_role': new_role
+                        }, token)
+                        
+                        if response and response.status_code == 200:
+                            st.success(f"✅ {response.json().get('message')}")
+                            # 목록 새로고침
+                            response = make_flask_request('/api/users', 'GET', token=token)
+                            if response and response.status_code == 200:
+                                st.session_state.admin_users = response.json().get('users', [])
+                            st.rerun()
+                        else:
+                            error_msg = response.json().get('message', '처리 실패') if response else '서버 연결 실패'
+                            st.error(f"❌ 역할 변경 실패: {error_msg}")
+    
+    # ✅ 호냥이 초기화 기능 추가
+    st.subheader("💰 호냥이 관리")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        with st.form("reset_honyangi"):
+            st.write("**호냥이 초기화**")
+            reset_email = st.selectbox(
+                "대상 선택",
+                options=[user['이메일'] for user in users_for_display] if 'admin_users' in st.session_state else [],
+                key="reset_select"
+            )
+            reset_amount = st.number_input("초기화 금액", min_value=0, max_value=1000, value=100, key="reset_amount")
+            
+            if st.form_submit_button("🔄 호냥이 초기화"):
+                if reset_email:
+                    # 현재 호냥이 조회
+                    current_response = make_flask_request('/api/users', 'GET', token=token)
+                    if current_response and current_response.status_code == 200:
+                        users = current_response.json().get('users', [])
+                        target_user = next((u for u in users if u.get('email') == reset_email), None)
+                        if target_user:
+                            current_amount = target_user.get('honyangi', 0)
+                            difference = reset_amount - current_amount
+                            
+                            # 호냥이 조정
+                            adjust_response = make_flask_request('/api/honyangi', 'POST', {
+                                'target_email': reset_email, 
+                                'amount': difference
+                            }, token)
+                            
+                            if adjust_response and adjust_response.status_code == 200:
+                                st.success(f"✅ {reset_email}의 호냥이를 {reset_amount}로 초기화했습니다.")
+                                # 목록 새로고침
+                                response = make_flask_request('/api/users', 'GET', token=token)
+                                if response and response.status_code == 200:
+                                    st.session_state.admin_users = response.json().get('users', [])
+                                st.rerun()
+    
 
 def main():
     """메인 앱 함수"""

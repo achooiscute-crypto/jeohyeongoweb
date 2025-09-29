@@ -13,7 +13,11 @@ load_dotenv()
 
 # Flask 앱 생성 (가장 먼저 정의)
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:8501", "https://jeohyeonweb.web.app"])  # ✅ CORS 추가
+CORS(app, origins=[
+    "http://localhost:8501", 
+    "https://jeohyeonweb.web.app",
+    "https://jeohyeonweb.firebaseapp.com"  # ✅ 실제 도메인 추가
+])
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'fallback-secret-key-for-development')
 
 # Firebase Admin SDK 초기화
@@ -22,17 +26,25 @@ def initialize_firebase():
         # 서비스 계정 키 파일로 초기화 시도
         cred = credentials.Certificate("serviceAccountKey.json")
         firebase_admin.initialize_app(cred)
-        print("Firebase Admin SDK initialized with service account key")
+        print("✅ Firebase Admin SDK initialized with service account key")
+        return True
     except FileNotFoundError:
+        print("❌ serviceAccountKey.json 파일을 찾을 수 없습니다.")
         try:
-            # 환경 변수를 통한 초기화 시도
+            # 환경 변수를 통한 초기화 시도 (명시적 프로젝트 ID 설정)
+            project_id = "jeohyeonweb"  # Firebase 프로젝트 ID로 수정
             cred = credentials.ApplicationDefault()
-            firebase_admin.initialize_app(cred)
-            print("Firebase Admin SDK initialized with application default credentials")
+            firebase_admin.initialize_app(cred, {
+                'projectId': project_id
+            })
+            print(f"✅ Firebase Admin SDK initialized with project ID: {project_id}")
+            return True
         except Exception as e:
-            print(f"Firebase initialization failed: {e}")
-            # 테스트를 위한 더미 초기화 (실제 배포 시 제거)
-            print("Warning: Using dummy Firebase setup for testing")
+            print(f"❌ Firebase initialization failed: {e}")
+            return False
+    except Exception as e:
+        print(f"❌ Firebase initialization failed: {e}")
+        return False
 
 # Firestore 클라이언트 얻기
 def get_db():
@@ -86,7 +98,7 @@ def token_required(f):
 # 사용자 프로필 초기화/조회 함수
 def init_or_get_user_profile(user_uid, email, name):
     if not db:
-        return {'email': email, 'display_name': name, 'honyangi': 100, 'role': 'student'}
+        return {'email': email, 'display_name': name, 'honyangi': 1, 'role': 'student'}
     
     try:
         user_ref = db.collection('users').document(user_uid)
@@ -122,23 +134,34 @@ def login():
         return jsonify({'message': 'ID token is required'}), 400
     
     try:
+        print(f"🔐 ID 토큰 받음: {id_token[:50]}...")  # 토큰 일부만 출력
+        
         # Firebase ID 토큰 검증
         decoded_token = auth.verify_id_token(id_token)
+        print(f"✅ 토큰 검증 성공: {decoded_token['email']}")
+        
         user_uid = decoded_token['uid']
         email = decoded_token['email']
         name = decoded_token.get('name', '')
 
         # 이메일 도메인 검증
         if not email.endswith('@jeohyeon.hs.kr'):
+            print(f"❌ 도메인 검증 실패: {email}")
             return jsonify({'message': '학교 구글 계정(@jeohyeon.hs.kr)으로만 로그인 가능합니다.'}), 403
+
+        print(f"✅ 도메인 검증 성공: {email}")
 
         # 사용자 프로필 처리
         user_profile = init_or_get_user_profile(user_uid, email, name)
+        print(f"✅ 사용자 프로필 처리: {user_profile['display_name']} (역할: {user_profile['role']})")
         
         # JWT 생성
         jwt_token = create_jwt(user_uid, email, user_profile['role'])
         if not jwt_token:
+            print("❌ JWT 생성 실패")
             return jsonify({'message': 'JWT 생성 중 오류가 발생했습니다.'}), 500
+
+        print(f"✅ JWT 생성 성공: {jwt_token[:50]}...")
 
         return jsonify({
             'message': 'Login successful',
@@ -152,13 +175,18 @@ def login():
         }), 200
         
     except auth.ExpiredIdTokenError:
+        print("❌ 토큰 만료")
         return jsonify({'message': '로그인 세션이 만료되었습니다.'}), 401
-    except auth.InvalidIdTokenError:
+    except auth.InvalidIdTokenError as e:
+        print(f"❌ 유효하지 않은 토큰: {e}")
         return jsonify({'message': '유효하지 않은 로그인 정보입니다.'}), 401
     except Exception as e:
-        print(f"Login error: {e}")
+        print(f"❌ 로그인 처리 중 예상치 못한 오류: {e}")
+        import traceback
+        print(f"🔍 상세 트레이스백:")
+        traceback.print_exc()
         return jsonify({'message': f'로그인 처리 중 오류가 발생했습니다: {str(e)}'}), 500
-
+    
 @app.route('/api/profile', methods=['GET'])
 @token_required
 def get_profile(current_user):
