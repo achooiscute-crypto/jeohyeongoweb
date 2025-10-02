@@ -304,8 +304,7 @@ def show_admin_features(token, user_info):
                 '호냥이': user.get('honyangi', 0)
             })
         
-         # ✅ use_container_width 대신 container_width 사용 (경고 해결)
-        st.dataframe(users_for_display, container_width=True)  # ✅ 수정된 부분
+        st.dataframe(users_for_display, use_container_width=True)
         
         # ✅ 빠른 역할 변경
         st.subheader("🔄 빠른 역할 변경")
@@ -400,38 +399,39 @@ def main():
         <script>
         var authData = localStorage.getItem('honyangi_auth');
         if (authData) {
-            // 토큰 복원을 위한 쿼리 파라미터 설정
-            const url = new URL(window.location);
-            url.searchParams.set('restore_token', JSON.parse(authData).token);
-            window.history.replaceState({}, '', url);
-            window.location.reload();
+            window.parent.postMessage({type: 'RESTORE_AUTH', data: authData}, '*');
         }
         </script>
         """
         html(auth_data_json, height=0)
 
-    # ✅ 복원 토큰 처리 (쿼리 파라미터에서)
+    # ✅ 메시지 리스너 - LocalStorage에서 복원된 데이터 처리
+    auth_restore_js = """
+    <script>
+    window.addEventListener('message', function(event) {
+        if (event.data.type === 'RESTORE_AUTH') {
+            const authData = JSON.parse(event.data.data);
+            // Streamlit의 세션 상태 복원을 위해 쿼리 파라미터 설정
+            const url = new URL(window.location);
+            url.searchParams.set('restore_token', authData.token);
+            window.history.replaceState({}, '', url);
+            window.location.reload();
+        }
+    });
+    </script>
+    """
+    html(auth_restore_js, height=0)
+
+    # ✅ 복원 토큰 처리
     if 'restore_token' in st.query_params and not st.session_state.auth_token:
         restore_token = st.query_params['restore_token']
         st.session_state.auth_token = restore_token
-        
         # 사용자 정보 복원 (Flask 서버에서 다시 가져옴)
         response = make_flask_request('/api/profile', 'GET', token=restore_token)
         if response and response.status_code == 200:
             st.session_state.user_info = response.json().get('user')
-            st.query_params.clear()  # 복원 토큰 제거
-            st.rerun()
-        else:
-            # 복원 실패 시 LocalStorage 정리
-            cleanup_js = """
-            <script>
-            localStorage.removeItem('honyangi_auth');
-            </script>
-            """
-            html(cleanup_js, height=0)
-            st.session_state.auth_token = None
-            st.query_params.clear()
-            st.rerun()
+        st.query_params.clear()
+        st.rerun()
     
     # ✅ 로그아웃 플래그 확인
     if 'logout_triggered' in st.session_state and st.session_state.logout_triggered:
@@ -444,7 +444,7 @@ def main():
         show_login_page()
         return
     
-    # 토큰 검증 및 페이지 표시
+    # 토큰 검증
     if st.session_state.auth_token:
         user_data = verify_token(st.session_state.auth_token)
         if user_data:
