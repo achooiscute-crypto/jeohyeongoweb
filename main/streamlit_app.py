@@ -14,7 +14,7 @@ load_dotenv()
 # Flask 서버 기본 URL
 FLASK_SERVER_URL = "http://localhost:5000"
 
-# Firebase 호스팅된 인증 페이지 URL (✅ 실제 URL로 수정)
+# Firebase 호스팅된 인증 페이지 URL
 FIREBASE_AUTH_URL = "https://jeohyeonweb.firebaseapp.com"
 
 # Streamlit 세션 상태 초기화
@@ -73,6 +73,19 @@ def handle_login_callback(id_token):
         data = response.json()
         st.session_state.auth_token = data['access_token']
         st.session_state.user_info = data['user']
+        
+        # ✅ LocalStorage에 로그인 정보 저장 (새로고침 후에도 상태 유지)
+        save_auth_js = f"""
+        <script>
+        var authData = {{
+            token: "{data['access_token']}",
+            user: {json.dumps(data['user'])}
+        }};
+        localStorage.setItem('honyangi_auth', JSON.stringify(authData));
+        </script>
+        """
+        html(save_auth_js, height=0)
+        
         st.success("✅ 로그인 성공!")
         st.rerun()
     else:
@@ -118,12 +131,13 @@ def show_login_page():
         
         with col1:
             st.subheader("로그인")
+            # ✅ use_container_width 대신 width 사용 (경고 메시지 해결)
             if st.button("🚪 **Google 로그인**", 
                         type="primary", 
-                        use_container_width=True,
+                        width='stretch',  # ✅ use_container_width=True 대체
                         key="main_login"):
                 webbrowser.open_new(FIREBASE_AUTH_URL)
-                st.info("로그인 페이지가 열렸습니다. 로그인을 완료해주세요.")
+                st.info("로그인 페이지가 열립니다. 로그인을 완료해주세요.")
         
         with col2:
             st.subheader("도움말")
@@ -136,7 +150,8 @@ def show_login_page():
         # ✅ 간소화된 수동 로그인
         with st.expander("🛠️ 수동 로그인 (문제 발생 시)"):
             manual_token = st.text_area("토큰을 여기에 붙여넣으세요", height=80)
-            if st.button("🔐 수동 로그인", use_container_width=True):
+            # ✅ use_container_width 대신 width 사용
+            if st.button("🔐 수동 로그인", width='stretch'):  # ✅ use_container_width=True 대체
                 if manual_token.strip():
                     handle_login_callback(manual_token.strip())
                 else:
@@ -155,54 +170,6 @@ def show_login_page():
         """
         html(auth_js, height=0)
 
-     # ✅ 쿼리 파라미터에서 토큰 자동 처리
-    if 'token' in st.query_params and not st.session_state.auth_token:
-        id_token = st.query_params['token']
-        st.info("🔐 토큰을 받았습니다. 로그인 처리 중...")
-        
-        # Flask 서버로 토큰 검증 요청
-        response = make_flask_request('/api/login', 'POST', {'id_token': id_token})
-        
-        if response and response.status_code == 200:
-            data = response.json()
-            st.session_state.auth_token = data['access_token']
-            st.session_state.user_info = data['user']
-            st.query_params.clear()  # 토큰 제거
-            st.rerun()
-        else:
-            error_msg = response.json().get('message', '로그인 실패') if response else '서버 연결 실패'
-            st.error(f"❌ 로그인 실패: {error_msg}")
-
-    # 로그인 안내 UI
-    if not st.session_state.auth_token:
-        st.write("학교 구글 계정(@jeohyeon.hs.kr)으로 로그인해 주세요.")
-        
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            st.subheader("로그인 방법")
-            st.markdown("""
-            1. 아래 버튼을 클릭하여 로그인 페이지를 엽니다
-            2. Google 계정으로 로그인합니다
-            3. 로그인 성공 후 자동으로 이 페이지로 돌아옵니다
-            """)
-        
-        with col2:
-            if st.button("🚪 로그인 페이지 열기", type="primary"):
-                webbrowser.open_new("https://jeohyeonweb.firebaseapp.com")
-                st.info("로그인 페이지가 새 창에서 열립니다. 로그인 후 이 페이지로 돌아오세요.")
-
-        # 수동 토큰 입력 (백업 방법)
-        with st.expander("🔧 수동 토큰 입력 (자동 로그인 실패 시)"):
-            manual_token = st.text_area("토큰을 여기에 붙여넣으세요", height=100)
-            if st.button("수동 로그인"):
-                if manual_token:
-                    response = make_flask_request('/api/login', 'POST', {'id_token': manual_token})
-                    if response and response.status_code == 200:
-                        data = response.json()
-                        st.session_state.auth_token = data['access_token']
-                        st.session_state.user_info = data['user']
-                        st.rerun()
-
 def show_main_page():
     """메인 페이지 표시"""
     token = st.session_state.auth_token
@@ -215,7 +182,16 @@ def show_main_page():
         st.write(f"**역할:** {user_info['role']} | **보유 호냥이:** {user_info.get('honyangi', 0)}")
     with col2:
         if st.button("🚪 로그아웃"):
-            # ✅ 로그아웃 플래그 설정 후 리로드
+            # ✅ LocalStorage에서 인증 정보 제거
+            logout_js = """
+            <script>
+            localStorage.removeItem('honyangi_auth');
+            </script>
+            """
+            html(logout_js, height=0)
+            
+            st.session_state.auth_token = None
+            st.session_state.user_info = None
             st.session_state.logout_triggered = True
             st.rerun()
     
@@ -254,6 +230,7 @@ def show_student_features(token, user_info):
     # 호냥이 내역 조회 (간단한 버전)
     with st.expander("📊 호냥이 사용 내역"):
         st.info("호냥이 내역 기능은 추후 구현 예정입니다.")
+
 def show_manager_features(token, user_info):
     """부장 기능 표시"""
     st.header("💰 부장 메뉴 - 호냥이 관리")
@@ -302,7 +279,7 @@ def show_manager_features(token, user_info):
                     else:
                         error_msg = response.json().get('message', '처리 실패') if response else '서버 연결 실패'
                         st.error(f"❌ 호냥이 변경 실패: {error_msg}")
-                        
+
 def show_admin_features(token, user_info):
     """관리자 기능 표시"""
     st.header("⚙️ 관리자 메뉴")
@@ -346,7 +323,8 @@ def show_admin_features(token, user_info):
         with col3:
             st.write("")  # 공백
             st.write("")  # 공백
-            if st.button("🚀 역할 변경", type="primary", use_container_width=True):
+            # ✅ use_container_width 대신 width 사용
+            if st.button("🚀 역할 변경", type="primary", width='stretch'):  # ✅ use_container_width=True 대체
                 if selected_user:
                     with st.spinner("역할 변경 중..."):
                         response = make_flask_request('/api/role', 'POST', {
@@ -404,7 +382,6 @@ def show_admin_features(token, user_info):
                                 if response and response.status_code == 200:
                                     st.session_state.admin_users = response.json().get('users', [])
                                 st.rerun()
-    
 
 def main():
     """메인 앱 함수"""
@@ -415,7 +392,48 @@ def main():
         initial_sidebar_state="collapsed"
     )
     
-    # ✅ 로그아웃 플래그 확인 (가장 먼저)
+    # ✅ 페이지 새로고침 시 로그인 상태 복원 (가장 먼저 실행)
+    if 'auth_token' not in st.session_state:
+        # LocalStorage에서 로그인 정보 가져오기 시도
+        auth_data_json = """
+        <script>
+        var authData = localStorage.getItem('honyangi_auth');
+        if (authData) {
+            window.parent.postMessage({type: 'RESTORE_AUTH', data: authData}, '*');
+        }
+        </script>
+        """
+        html(auth_data_json, height=0)
+
+    # ✅ 메시지 리스너 - LocalStorage에서 복원된 데이터 처리
+    auth_restore_js = """
+    <script>
+    window.addEventListener('message', function(event) {
+        if (event.data.type === 'RESTORE_AUTH') {
+            const authData = JSON.parse(event.data.data);
+            // Streamlit의 세션 상태 복원을 위해 쿼리 파라미터 설정
+            const url = new URL(window.location);
+            url.searchParams.set('restore_token', authData.token);
+            window.history.replaceState({}, '', url);
+            window.location.reload();
+        }
+    });
+    </script>
+    """
+    html(auth_restore_js, height=0)
+
+    # ✅ 복원 토큰 처리
+    if 'restore_token' in st.query_params and not st.session_state.auth_token:
+        restore_token = st.query_params['restore_token']
+        st.session_state.auth_token = restore_token
+        # 사용자 정보 복원 (Flask 서버에서 다시 가져옴)
+        response = make_flask_request('/api/profile', 'GET', token=restore_token)
+        if response and response.status_code == 200:
+            st.session_state.user_info = response.json().get('user')
+        st.query_params.clear()
+        st.rerun()
+    
+    # ✅ 로그아웃 플래그 확인
     if 'logout_triggered' in st.session_state and st.session_state.logout_triggered:
         st.session_state.logout_triggered = False
         st.session_state.auth_token = None
