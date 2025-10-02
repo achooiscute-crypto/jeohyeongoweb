@@ -12,7 +12,7 @@ import json
 load_dotenv()
 
 # Flask 서버 기본 URL
-FLASK_SERVER_URL = "http://localhost:5000"
+FLASK_SERVER_URL = "https://jeohyeongoweb-flask.onrender.com"
 
 # Firebase 호스팅된 인증 페이지 URL
 FIREBASE_AUTH_URL = "https://jeohyeonweb.firebaseapp.com"
