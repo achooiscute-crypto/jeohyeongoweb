@@ -304,7 +304,7 @@ def show_admin_features(token, user_info):
                 '호냥이': user.get('honyangi', 0)
             })
         
-        st.dataframe(users_for_display, use_container_width=True)
+        st.dataframe(users_for_display, width='stretch')
         
         # ✅ 빠른 역할 변경
         st.subheader("🔄 빠른 역할 변경")
