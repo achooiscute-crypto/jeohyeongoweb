@@ -1,0 +1,6 @@
+flask==2.3.3
+firebase-admin==6.5.0
+pyjwt==2.8.0
+flask-cors==4.0.0
+python-dotenv==1.0.0
+gunicorn==21.2.0
