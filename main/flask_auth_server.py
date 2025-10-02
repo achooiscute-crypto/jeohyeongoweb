@@ -1,47 +1,54 @@
-# flask_auth_server.py
-from flask_cors import CORS  # pip install flask-cors
-from flask import Flask, request, jsonify, session, redirect, url_for
+# flask_auth_server.py (Render 배포용)
+from flask_cors import CORS
+from flask import Flask, request, jsonify
 import firebase_admin
 from firebase_admin import credentials, auth, firestore
 import jwt
 import datetime
 from functools import wraps
 import os
-from dotenv import load_dotenv
+import json
 
-load_dotenv()
-
-# Flask 앱 생성 (가장 먼저 정의)
+# Flask 앱 생성
 app = Flask(__name__)
-CORS(app, origins=[
-    "http://localhost:8501", 
-    "https://jeohyeonweb.web.app",
-    "https://jeohyeonweb.firebaseapp.com"  # ✅ 실제 도메인 추가
-])
-app.secret_key = os.getenv('FLASK_SECRET_KEY', 'fallback-secret-key-for-development')
 
-# Firebase Admin SDK 초기화
+# ✅ Render 환경에서의 CORS 설정
+allowed_origins = [
+    "http://localhost:8501",
+    "https://jeohyeonweb.firebaseapp.com",
+    "https://jeohyeonweb.web.app",
+    # 추후 Streamlit Cloud 배포 시 여기에 URL 추가
+]
+
+CORS(app, origins=allowed_origins)
+
+# ✅ Render 환경 변수 사용
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'fallback-secret-key-for-development')
+
+# Firebase Admin SDK 초기화 함수
 def initialize_firebase():
     try:
-        # 서비스 계정 키 파일로 초기화 시도
-        cred = credentials.Certificate("serviceAccountKey.json")
-        firebase_admin.initialize_app(cred)
-        print("✅ Firebase Admin SDK initialized with service account key")
-        return True
-    except FileNotFoundError:
-        print("❌ serviceAccountKey.json 파일을 찾을 수 없습니다.")
-        try:
-            # 환경 변수를 통한 초기화 시도 (명시적 프로젝트 ID 설정)
-            project_id = "jeohyeonweb"  # Firebase 프로젝트 ID로 수정
-            cred = credentials.ApplicationDefault()
-            firebase_admin.initialize_app(cred, {
-                'projectId': project_id
-            })
-            print(f"✅ Firebase Admin SDK initialized with project ID: {project_id}")
+        # ✅ Render 환경 변수에서 서비스 계정 정보 읽기
+        service_account_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON')
+        
+        if service_account_json:
+            # 환경 변수에서 JSON 문자열 읽기
+            service_account_info = json.loads(service_account_json)
+            cred = credentials.Certificate(service_account_info)
+            firebase_admin.initialize_app(cred)
+            print("✅ Firebase Admin SDK initialized from environment variables")
             return True
-        except Exception as e:
-            print(f"❌ Firebase initialization failed: {e}")
-            return False
+        else:
+            # ✅ 로컬 개발용: 서비스 계정 파일 사용
+            try:
+                cred = credentials.Certificate("serviceAccountKey.json")
+                firebase_admin.initialize_app(cred)
+                print("✅ Firebase Admin SDK initialized from service account file")
+                return True
+            except FileNotFoundError:
+                print("❌ serviceAccountKey.json 파일을 찾을 수 없습니다.")
+                return False
+                
     except Exception as e:
         print(f"❌ Firebase initialization failed: {e}")
         return False
@@ -56,8 +63,9 @@ def get_db():
         return None
 
 # Firebase 초기화 실행
-initialize_firebase()
-db = get_db()
+db = None
+if initialize_firebase():
+    db = get_db()
 
 # JWT 생성 함수
 def create_jwt(user_uid, email, role):
@@ -98,7 +106,9 @@ def token_required(f):
 # 사용자 프로필 초기화/조회 함수
 def init_or_get_user_profile(user_uid, email, name):
     if not db:
-        return {'email': email, 'display_name': name, 'honyangi': 1, 'role': 'student'}
+        # 특정 이메일은 관리자로, 나머지는 학생으로 설정
+        default_role = 'admin' if email == '2411224@jeohyeon.hs.kr' else 'student'
+        return {'email': email, 'display_name': name, 'honyangi': 100, 'role': default_role}
     
     try:
         user_ref = db.collection('users').document(user_uid)
@@ -107,12 +117,17 @@ def init_or_get_user_profile(user_uid, email, name):
             user_data = user_doc.to_dict()
             return user_data
         else:
-            # 새 사용자 생성
+            # 새 사용자 생성 시 특정 이메일은 관리자로, 나머지는 학생으로 설정
+            if email == '2411224@jeohyeon.hs.kr':
+                role = 'admin'
+            else:
+                role = 'student'
+            
             new_user = {
                 'email': email,
                 'display_name': name or email.split('@')[0],
                 'honyangi': 100,
-                'role': 'student',
+                'role': role,
                 'created_at': firestore.SERVER_TIMESTAMP
             }
             user_ref.set(new_user)
@@ -120,13 +135,24 @@ def init_or_get_user_profile(user_uid, email, name):
     except Exception as e:
         print(f"User profile error: {e}")
         # 오류 발생 시 기본값 반환
-        return {'email': email, 'display_name': name, 'honyangi': 100, 'role': 'student'}
+        default_role = 'admin' if email == '2411224@jeohyeon.hs.kr' else 'student'
+        return {'email': email, 'display_name': name, 'honyangi': 100, 'role': default_role}
 
-# 라우트 정의 (app이 정의된 후에)
+# ✅ 상태 확인 엔드포인트 추가 (Render 건강 검사용)
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({
+        'status': 'healthy',
+        'firebase_initialized': firebase_admin._apps != {},
+        'timestamp': datetime.datetime.now().isoformat()
+    })
+
+# ✅ 루트 엔드포인트
 @app.route('/')
 def home():
     return jsonify({'message': 'Flask Auth Server is running!'})
 
+# ✅ 로그인 API
 @app.route('/api/login', methods=['POST'])
 def login():
     id_token = request.json.get('id_token')
@@ -134,7 +160,7 @@ def login():
         return jsonify({'message': 'ID token is required'}), 400
     
     try:
-        print(f"🔐 ID 토큰 받음: {id_token[:50]}...")  # 토큰 일부만 출력
+        print(f"🔐 ID 토큰 받음: {id_token[:50]}...")
         
         # Firebase ID 토큰 검증
         decoded_token = auth.verify_id_token(id_token)
@@ -186,7 +212,8 @@ def login():
         print(f"🔍 상세 트레이스백:")
         traceback.print_exc()
         return jsonify({'message': f'로그인 처리 중 오류가 발생했습니다: {str(e)}'}), 500
-    
+
+# ✅ 프로필 조회 API
 @app.route('/api/profile', methods=['GET'])
 @token_required
 def get_profile(current_user):
@@ -213,6 +240,7 @@ def get_profile(current_user):
         print(f"Profile error: {e}")
         return jsonify({'message': str(e)}), 500
 
+# ✅ 프로필 업데이트 API
 @app.route('/api/profile', methods=['POST'])
 @token_required
 def update_profile(current_user):
@@ -232,6 +260,7 @@ def update_profile(current_user):
         print(f"Profile update error: {e}")
         return jsonify({'message': str(e)}), 500
 
+# ✅ 호냥이 관리 API
 @app.route('/api/honyangi', methods=['POST'])
 @token_required
 def update_honyangi(current_user):
@@ -274,6 +303,7 @@ def update_honyangi(current_user):
         print(f"Honyangi update error: {e}")
         return jsonify({'message': str(e)}), 500
 
+# ✅ 역할 변경 API
 @app.route('/api/role', methods=['POST'])
 @token_required
 def update_role(current_user):
@@ -308,6 +338,7 @@ def update_role(current_user):
         print(f"Role update error: {e}")
         return jsonify({'message': str(e)}), 500
 
+# ✅ 전체 사용자 조회 API
 @app.route('/api/users', methods=['GET'])
 @token_required
 def get_all_users(current_user):
@@ -332,7 +363,10 @@ def get_all_users(current_user):
         print(f"Get users error: {e}")
         return jsonify({'message': str(e)}), 500
 
+# ✅ Render에서 실행 시 Gunicorn 사용
 if __name__ == '__main__':
-    print("Starting Flask Auth Server...")
+    port = int(os.environ.get('PORT', 5000))
+    print(f"Starting Flask Auth Server on port {port}...")
     print(f"Secret key set: {bool(app.secret_key)}")
-    app.run(debug=True, port=5000, host='0.0.0.0')
+    print(f"Firebase initialized: {firebase_admin._apps != {}}")
+    app.run(debug=False, host='0.0.0.0', port=port)
