@@ -21,6 +21,10 @@ if 'auth_token' not in st.session_state:
     st.session_state.auth_token = None
 if 'user_info' not in st.session_state:
     st.session_state.user_info = None
+if 'logout_triggered' not in st.session_state:
+    st.session_state.logout_triggered = False
+if 'just_logged_out' not in st.session_state:
+    st.session_state.just_logged_out = False
 
 def make_flask_request(endpoint, method='GET', data=None, token=None):
     """Flask 서버에 요청을 보내는 헬퍼 함수"""
@@ -77,11 +81,33 @@ def handle_login_callback(id_token):
 def show_login_page():
     st.title("🏫 학교 웹사이트")
     
-    # ✅ 쿼리 파라미터에서 토큰 자동 처리
+    # ✅ 명시적 로그아웃 후에는 토큰 무시
+    if 'just_logged_out' in st.session_state and st.session_state.just_logged_out:
+        st.session_state.just_logged_out = False
+        st.success("✅ 안전하게 로그아웃되었습니다.")
+    
+    # ✅ 쿼리 파라미터에서 토큰 자동 처리 (로그아웃 상태에서만)
     if 'token' in st.query_params and not st.session_state.auth_token:
-        id_token = st.query_params['token']
-        handle_login_callback(id_token)
-        return
+        # 로그아웃 직후인지 확인
+        if 'logout_triggered' not in st.session_state or not st.session_state.logout_triggered:
+            id_token = st.query_params['token']
+            st.info("🔐 토큰을 받았습니다. 로그인 처리 중...")
+            
+            # Flask 서버로 토큰 검증 요청
+            response = make_flask_request('/api/login', 'POST', {'id_token': id_token})
+            
+            if response and response.status_code == 200:
+                data = response.json()
+                st.session_state.auth_token = data['access_token']
+                st.session_state.user_info = data['user']
+                st.query_params.clear()  # 토큰 제거
+                st.rerun()
+            else:
+                error_msg = response.json().get('message', '로그인 실패') if response else '서버 연결 실패'
+                st.error(f"❌ 로그인 실패: {error_msg}")
+        else:
+            # 로그아웃 직후면 토큰 무시하고 제거
+            st.query_params.clear()
 
     if not st.session_state.auth_token:
         st.success("학교 구글 계정(@jeohyeon.hs.kr)으로 로그인해 주세요.")
@@ -188,8 +214,8 @@ def show_main_page():
         st.write(f"**역할:** {user_info['role']} | **보유 호냥이:** {user_info.get('honyangi', 0)}")
     with col2:
         if st.button("🚪 로그아웃"):
-            st.session_state.auth_token = None
-            st.session_state.user_info = None
+            # ✅ 로그아웃 플래그 설정 후 리로드
+            st.session_state.logout_triggered = True
             st.rerun()
     
     st.divider()
@@ -387,6 +413,17 @@ def main():
         layout="wide",
         initial_sidebar_state="collapsed"
     )
+    
+    # ✅ 로그아웃 플래그 확인 (가장 먼저)
+    if 'logout_triggered' in st.session_state and st.session_state.logout_triggered:
+        st.session_state.logout_triggered = False
+        st.session_state.auth_token = None
+        st.session_state.user_info = None
+        # 쿼리 파라미터도 명시적으로 제거
+        if 'token' in st.query_params:
+            st.query_params.clear()
+        show_login_page()
+        return
     
     # 토큰 검증
     if st.session_state.auth_token:
