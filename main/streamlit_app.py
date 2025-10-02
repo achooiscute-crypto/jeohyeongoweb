@@ -7,6 +7,7 @@ import os
 from dotenv import load_dotenv
 import webbrowser
 from streamlit.components.v1 import html
+import json
 
 load_dotenv()
 
