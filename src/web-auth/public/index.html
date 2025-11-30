@@ -69,7 +69,7 @@
           })
           .then((idToken) => {
             // ✅ 자동 리다이렉트 로직 개선
-            const streamlitAppUrl = "http://localhost:8501";
+            const streamlitAppUrl = "https://jeohyeongoweb.streamlit.app/";
 
             // 먼저 메시지 전송 시도 (팝업인 경우)
             if (window.opener) {
@@ -118,7 +118,7 @@
 
       // ✅ 리다이렉트 함수
       function redirectToStreamlit(token) {
-        window.location.href = `http://localhost:8501?token=${encodeURIComponent(
+        window.location.href = `https://jeohyeongoweb.streamlit.app/?token=${encodeURIComponent(
           token
         )}`;
       }
