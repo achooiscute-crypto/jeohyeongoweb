@@ -17,6 +17,8 @@ allowed_origins = [
     "http://localhost:8501",
     "https://jeohyeonweb.firebaseapp.com",
     "https://jeohyeonweb.web.app",
+    "https://your-app.streamlit.app",
+
 ]
 
 CORS(app, origins=allowed_origins)
