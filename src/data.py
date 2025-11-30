@@ -10,51 +10,46 @@ firebase_admin.initialize_app(cred)
 db = firestore.client()
 
 # 스탬프 부스 목록
-STAMP_BOOTHS = [
-    "booth1", "booth2", "booth3", "booth4", "booth5",
-    "booth6", "booth7", "booth8", "booth9", "booth10"
-]
+STAMP_BOOTHS = [f"booth{i}" for i in range(1, 35)]
 
-def migrate_users():
-    """모든 사용자 데이터를 호냥이에서 스탬프 시스템으로 마이그레이션"""
+
+def migrate_to_34_stamps():
+    """기존 사용자 데이터를 34개 스탬프 시스템으로 마이그레이션"""
     try:
         users_ref = db.collection('users')
         docs = users_ref.stream()
         
         migrated_count = 0
-        error_count = 0
         
         for doc in docs:
             try:
                 user_data = doc.to_dict()
+                current_stamps = user_data.get('stamps', {})
                 
-                # 기본 스탬프 구조 생성
-                default_stamps = {booth: False for booth in STAMP_BOOTHS}
-                
-                # 업데이트할 데이터 준비
-                update_data = {
-                    'stamps': default_stamps
-                }
-                
-                # 호냥이 필드가 있으면 삭제 (선택사항)
-                if 'honyangi' in user_data:
-                    update_data['honyangi'] = firestore.DELETE_FIELD
+                # 새로운 34개 스탬프 구조 생성 (기존 데이터 유지)
+                new_stamps = {}
+                for i in range(1, 35):
+                    booth_id = f"booth{i}"
+                    # 기존 데이터 유지, 없는 스탬프는 False로 설정
+                    new_stamps[booth_id] = current_stamps.get(booth_id, False)
                 
                 # 문서 업데이트
-                doc.reference.update(update_data)
+                doc.reference.update({'stamps': new_stamps})
                 migrated_count += 1
                 print(f"✅ {user_data.get('email', 'Unknown')} 마이그레이션 완료")
                 
             except Exception as e:
-                error_count += 1
                 print(f"❌ {doc.id} 마이그레이션 실패: {e}")
         
         print(f"\n=== 마이그레이션 완료 ===")
         print(f"성공: {migrated_count}건")
-        print(f"실패: {error_count}건")
         
     except Exception as e:
         print(f"마이그레이션 중 오류 발생: {e}")
+
+if __name__ == '__main__':
+    print("34개 스탬프 시스템으로 마이그레이션을 시작합니다...")
+    migrate_to_34_stamps()
 
 def check_migration():
     """마이그레이션 결과 확인"""

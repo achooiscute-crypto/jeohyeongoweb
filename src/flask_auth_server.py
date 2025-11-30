@@ -26,11 +26,8 @@ CORS(app, origins=allowed_origins)
 # ✅ 환경 변수 사용
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'fallback-secret-key-for-development')
 
-# ✅ 스탬프 부스 목록 정의
-STAMP_BOOTHS = [
-    "booth1", "booth2", "booth3", "booth4", "booth5",
-    "booth6", "booth7", "booth8", "booth9", "booth10"
-]
+# ✅ 스탬프 부스 목록 34개로 확장 (기존 방식 유지)
+STAMP_BOOTHS = [f"booth{i}" for i in range(1, 35)]
 
 # flask_auth_server.py - initialize_firebase() 함수 확인
 def initialize_firebase():

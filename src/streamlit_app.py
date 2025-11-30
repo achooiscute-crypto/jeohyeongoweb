@@ -1,4 +1,3 @@
-# streamlit_app.py
 import streamlit as st
 import requests
 import jwt
@@ -16,11 +15,8 @@ FLASK_SERVER_URL = "https://jeohyeon-academic-web.onrender.com"  # 슬래시 제
 FIREBASE_AUTH_URL = "https://jeohyeonweb.firebaseapp.com"
 STREAMLIT_APP_URL = "https://jeohyeongoweb.streamlit.app"  # 새 변수 추가
 
-# 스탬프 부스 목록 (백엔드와 동일하게 유지)
-STAMP_BOOTHS = [
-    "booth1", "booth2", "booth3", "booth4", "booth5",
-    "booth6", "booth7", "booth8", "booth9", "booth10"
-]
+# 스탬프 34개로 확장 (기존 booth1, booth2, ... 방식 유지)
+STAMP_BOOTHS = [f"booth{i}" for i in range(1, 35)]
 
 # Streamlit 세션 상태 초기화
 if 'auth_token' not in st.session_state:
@@ -31,6 +27,18 @@ if 'logout_triggered' not in st.session_state:
     st.session_state.logout_triggered = False
 if 'just_logged_out' not in st.session_state:
     st.session_state.just_logged_out = False
+if 'current_page' not in st.session_state:
+    st.session_state.current_page = 0
+if 'grant_page' not in st.session_state:
+    st.session_state.grant_page = 0
+if 'revoke_page' not in st.session_state:
+    st.session_state.revoke_page = 0
+if 'admin_stamp_page' not in st.session_state:
+    st.session_state.admin_stamp_page = 0
+if 'show_schedule' not in st.session_state:
+    st.session_state.show_schedule = False
+if 'show_clubs' not in st.session_state:
+    st.session_state.show_clubs = False
 
 def make_flask_request(endpoint, method='GET', data=None, token=None):
     """Flask 서버에 요청을 보내는 헬퍼 함수"""
@@ -95,6 +103,51 @@ def handle_login_callback(id_token):
     else:
         error_msg = response.json().get('message', '로그인 실패') if response else '서버 연결 실패'
         st.error(f"❌ 로그인 실패: {error_msg}")
+
+def show_schedule_section():
+    """발표 일정 섹션"""
+    st.subheader("📅 발표 일정")
+    
+    # 샘플 발표 일정 데이터
+    schedule_data = [
+        {"시간": "09:00 - 09:30", "제목": "개회식", "장소": "강당"},
+        {"시간": "09:30 - 10:30", "제목": "1학년 과학 발표", "장소": "1층 로비"},
+        {"시간": "10:30 - 11:30", "제목": "2학년 역사 발표", "장소": "2층 세미나실"},
+        {"시간": "11:30 - 12:30", "제목": "점심 시간", "장소": "식당"},
+        {"시간": "12:30 - 14:00", "제목": "동아리 발표회", "장소": "각 동아리실"},
+        {"시간": "14:00 - 15:00", "제목": "특별 강연", "장소": "강당"},
+        {"시간": "15:00 - 16:00", "제목": "폐회식", "장소": "강당"},
+    ]
+    
+    for event in schedule_data:
+        with st.container():
+            col1, col2, col3 = st.columns([2, 3, 1])
+            with col1:
+                st.write(f"**{event['시간']}**")
+            with col2:
+                st.write(event['제목'])
+            with col3:
+                st.write(event['장소'])
+            st.markdown("---")
+
+def show_clubs_section():
+    """동아리 목록 섹션"""
+    st.subheader("🏫 동아리 목록")
+    
+    # 샘플 동아리 데이터
+    clubs_data = [
+        {"이름": "과학 동아리", "지도교사": "김영희 선생님", "활동장소": "과학실 1", "소개": "실험과 연구를 통한 과학 탐구"},
+        {"이름": "역사 동아리", "지도교사": "이철수 선생님", "활동장소": "인문학실", "소개": "역사 탐방과 자료 연구"},
+        {"이름": "미술 동아리", "지도교사": "박지민 선생님", "활동장소": "미술실", "소개": "다양한 미술 활동과 전시"},
+        {"이름": "음악 동아리", "지도교사": "정다운 선생님", "활동장소": "음악실", "소개": "합주와 공연 준비"},
+        {"이름": "봉사 동아리", "지도교사": "최성민 선생님", "활동장소": "상담실", "소개": "지역사회 봉사 활동"},
+        {"이름": "코딩 동아리", "지도교사": "한지훈 선생님", "활동장소": "컴퓨터실", "소개": "프로그래밍과 앱 개발"},
+    ]
+    
+    for club in clubs_data:
+        with st.expander(f"**{club['이름']}** - {club['지도교사']}"):
+            st.write(f"**활동 장소:** {club['활동장소']}")
+            st.write(f"**동아리 소개:** {club['소개']}")
 
 def show_login_page():
     st.title("🏫 학교 웹사이트")
@@ -187,158 +240,208 @@ def show_login_page():
         """
         html(auth_js, height=0)
 
-def show_main_page():
-    """메인 페이지 표시"""
-    token = st.session_state.auth_token
-    user_info = st.session_state.user_info
-    
-    # 상단 바
-    col1, col2 = st.columns([4, 1])
-    with col1:
-        st.title(f"👋 {user_info['display_name']}님, 환영합니다!")
-        
-        # 스탬프 개수 계산
-        stamp_count = sum(1 for booth, has_stamp in user_info.get('stamps', {}).items() if has_stamp)
-        total_booths = len(STAMP_BOOTHS)
-        
-        st.write(f"**역할:** {user_info['role']} | **스탬프:** {stamp_count}/{total_booths}")
-        
-        # 진행률 표시줄
-        progress = stamp_count / total_booths if total_booths > 0 else 0
-        st.progress(progress)
-        st.caption(f"스탬프 진행률: {stamp_count}/{total_booths} ({progress:.1%})")
-        
-    with col2:
-        if st.button("🚪 로그아웃"):
-            # ✅ LocalStorage에서 인증 정보 제거
-            logout_js = """
-            <script>
-            localStorage.removeItem('stamp_auth');
-            </script>
-            """
-            html(logout_js, height=0)
-            
-            st.session_state.auth_token = None
-            st.session_state.user_info = None
-            st.session_state.logout_triggered = True
-            st.rerun()
-    
-    st.divider()
-    
-    # 역할별 기능 표시
-    show_student_features(token, user_info)
-    
-    if user_info['role'] in ['manager', 'admin']:
-        st.divider()
-        show_manager_features(token, user_info)
-    
-    if user_info['role'] == 'admin':
-        st.divider()
-        show_admin_features(token, user_info)
-
 def show_student_features(token, user_info):
-    """학생 기능 표시"""
+    """학생 기능 표시 - 페이지네이션 추가"""
     st.header("🎫 나의 스탬프 현황")
     
-    # 스탬프 그리드 표시
-    stamps = user_info.get('stamps', {})
+    # 페이지네이션 상태 관리
+    stamps_per_page = 10
+    total_pages = (len(STAMP_BOOTHS) + stamps_per_page - 1) // stamps_per_page
     
-    # 5열 그리드로 스탬프 표시
+    # 페이지네이션 컨트롤
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col1:
+        if st.button("◀ 이전", disabled=st.session_state.current_page == 0):
+            st.session_state.current_page -= 1
+            st.rerun()
+    with col2:
+        st.write(f"페이지 {st.session_state.current_page + 1} / {total_pages}")
+    with col3:
+        if st.button("다음 ▶", disabled=st.session_state.current_page >= total_pages - 1):
+            st.session_state.current_page += 1
+            st.rerun()
+    
+    # 현재 페이지의 스탬프 표시
+    start_idx = st.session_state.current_page * stamps_per_page
+    end_idx = min(start_idx + stamps_per_page, len(STAMP_BOOTHS))
+    current_stamps = STAMP_BOOTHS[start_idx:end_idx]
+    
+    # 스탬프 그리드 표시 (5x2 레이아웃)
+    stamps_data = user_info.get('stamps', {})
+    
+    # 5열 그리드
     cols = st.columns(5)
-    for i, booth in enumerate(STAMP_BOOTHS):
+    for i, booth in enumerate(current_stamps):
         col_idx = i % 5
-        has_stamp = stamps.get(booth, False)
+        has_stamp = stamps_data.get(booth, False)
+        booth_number = booth.replace("booth", "")  # "1", "2", ...
         
         with cols[col_idx]:
-            # 스탬프 모양 (동그란 버튼 형태)
             if has_stamp:
                 st.markdown(
                     f"""
                     <div style='
-                        width: 80px; 
-                        height: 80px; 
-                        border-radius: 50%; 
+                        width: 80px; height: 80px; border-radius: 50%; 
                         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        display: flex; 
-                        align-items: center; 
-                        justify-content: center; 
-                        color: white; 
-                        font-weight: bold;
-                        margin: 10px auto;
+                        display: flex; align-items: center; justify-content: center; 
+                        color: white; font-weight: bold; margin: 10px auto;
                         box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+                        font-size: 16px;
                     '>
-                        ✓
+                        {booth_number}
                     </div>
                     """, 
                     unsafe_allow_html=True
                 )
-                st.success(f"**{booth}**")
+                st.success(f"**부스 {booth_number}**")
             else:
                 st.markdown(
                     f"""
                     <div style='
-                        width: 80px; 
-                        height: 80px; 
-                        border-radius: 50%; 
-                        background: #f0f0f0;
-                        border: 2px dashed #ccc;
-                        display: flex; 
-                        align-items: center; 
-                        justify-content: center; 
-                        color: #999; 
-                        margin: 10px auto;
+                        width: 80px; height: 80px; border-radius: 50%; 
+                        background: #f0f0f0; border: 2px dashed #ccc;
+                        display: flex; align-items: center; justify-content: center; 
+                        color: #999; margin: 10px auto; font-size: 16px;
                     '>
-                        ?
+                        {booth_number}
                     </div>
                     """, 
                     unsafe_allow_html=True
                 )
-                st.info(f"**{booth}**")
+                st.info(f"**부스 {booth_number}**")
+    
+    # 진행 상황 요약
+    stamp_count = sum(1 for has_stamp in stamps_data.values() if has_stamp)
+    total_stamps = len(STAMP_BOOTHS)
+    progress = stamp_count / total_stamps
+    
+    st.subheader("📊 진행 상황")
+    st.progress(progress)
+    st.write(f"**{stamp_count} / {total_stamps} 스탬프 획득** ({progress:.1%})")
     
     # 프로필 정보
     with st.expander("👤 내 프로필 정보"):
         st.write(f"**표시 이름:** {user_info.get('display_name', '이름 없음')}")
         st.write(f"**이메일:** {user_info['email']}")
         st.write(f"**역할:** {user_info['role']}")
-        st.write(f"**가입일:** {user_info.get('created_at', '알 수 없음')}")
+        st.write(f"**획득 스탬프:** {stamp_count}개")
 
 def show_manager_features(token, user_info):
-    """부장 기능 표시"""
+    """부장 기능 표시 - 페이지네이션 추가"""
     st.header("🔄 부스 스탬프 관리")
     
-    with st.form("stamp_management_form"):
-        st.subheader("스탬프 부여/회수")
-        
-        # 대상 사용자 입력
-        target_email = st.text_input("대상 학생 이메일", placeholder="2411224@jeohyeon.hs.kr")
-        
-        # 부스 선택
-        booth_id = st.selectbox("부스 선택", STAMP_BOOTHS)
-        
-        # 작업 선택
-        action = st.radio("작업 선택", ["부여하기 🎫", "회수하기 ❌"], horizontal=True)
-        
-        action_type = "grant" if action == "부여하기 🎫" else "revoke"
-        action_text = "부여" if action_type == "grant" else "회수"
-        
-        submitted = st.form_submit_button(f"✅ 스탬프 {action_text}")
-        
-        if submitted:
-            if not target_email:
-                st.error("❌ 대상 이메일을 입력하세요.")
-            else:
-                with st.spinner("스탬프 변경 중..."):
-                    response = make_flask_request('/api/stamps', 'POST', {
-                        'target_email': target_email, 
-                        'booth_id': booth_id,
-                        'action': action_type
-                    }, token)
-                    
-                    if response and response.status_code == 200:
-                        st.success(f"✅ {response.json().get('message')}")
-                    else:
-                        error_msg = response.json().get('message', '처리 실패') if response else '서버 연결 실패'
-                        st.error(f"❌ 스탬프 변경 실패: {error_msg}")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("🎫 스탬프 부여하기")
+        with st.form("grant_form"):
+            target_email = st.text_input("대상 학생 이메일", placeholder="2411224@jeohyeon.hs.kr", key="grant_email")
+            
+            # 페이지네이션으로 스탬프 선택
+            stamps_per_page = 12
+            total_pages = (len(STAMP_BOOTHS) + stamps_per_page - 1) // stamps_per_page
+            
+            # 스탬프 선택 그리드
+            st.write("부여할 스탬프 선택:")
+            grant_cols = st.columns(4)
+            start_idx = st.session_state.grant_page * stamps_per_page
+            end_idx = min(start_idx + stamps_per_page, len(STAMP_BOOTHS))
+            
+            selected_stamp = None
+            for i, booth in enumerate(STAMP_BOOTHS[start_idx:end_idx]):
+                col_idx = i % 4
+                with grant_cols[col_idx]:
+                    booth_number = booth.replace("booth", "")
+                    if st.button(f"부스 {booth_number}", key=f"grant_{booth}"):
+                        selected_stamp = booth
+            
+            # 페이지네이션 컨트롤
+            grant_page_col1, grant_page_col2, grant_page_col3 = st.columns([1, 2, 1])
+            with grant_page_col1:
+                if st.button("◀", key="grant_prev"):
+                    st.session_state.grant_page = max(0, st.session_state.grant_page - 1)
+                    st.rerun()
+            with grant_page_col2:
+                st.write(f"페이지 {st.session_state.grant_page + 1}/{total_pages}")
+            with grant_page_col3:
+                if st.button("▶", key="grant_next"):
+                    st.session_state.grant_page = min(total_pages - 1, st.session_state.grant_page + 1)
+                    st.rerun()
+            
+            if st.form_submit_button("✅ 스탬프 부여", use_container_width=True):
+                if not target_email:
+                    st.error("❌ 대상 이메일을 입력하세요.")
+                elif not selected_stamp:
+                    st.error("❌ 부여할 스탬프를 선택하세요.")
+                else:
+                    with st.spinner("스탬프 부여 중..."):
+                        response = make_flask_request('/api/stamps', 'POST', {
+                            'target_email': target_email, 
+                            'booth_id': selected_stamp,
+                            'action': 'grant'
+                        }, token)
+                        
+                        if response and response.status_code == 200:
+                            st.success(f"✅ {response.json().get('message')}")
+                            st.balloons()
+                        else:
+                            error_msg = response.json().get('message', '처리 실패') if response else '서버 연결 실패'
+                            st.error(f"❌ 스탬프 부여 실패: {error_msg}")
+
+    with col2:
+        st.subheader("❌ 스탬프 회수하기")
+        with st.form("revoke_form"):
+            target_email = st.text_input("대상 학생 이메일", placeholder="2411224@jeohyeon.hs.kr", key="revoke_email")
+            
+            # 페이지네이션으로 스탬프 선택
+            stamps_per_page = 12
+            total_pages = (len(STAMP_BOOTHS) + stamps_per_page - 1) // stamps_per_page
+            
+            # 스탬프 선택 그리드
+            st.write("회수할 스탬프 선택:")
+            revoke_cols = st.columns(4)
+            start_idx = st.session_state.revoke_page * stamps_per_page
+            end_idx = min(start_idx + stamps_per_page, len(STAMP_BOOTHS))
+            
+            selected_stamp = None
+            for i, booth in enumerate(STAMP_BOOTHS[start_idx:end_idx]):
+                col_idx = i % 4
+                with revoke_cols[col_idx]:
+                    booth_number = booth.replace("booth", "")
+                    if st.button(f"부스 {booth_number}", key=f"revoke_{booth}"):
+                        selected_stamp = booth
+            
+            # 페이지네이션 컨트롤
+            revoke_page_col1, revoke_page_col2, revoke_page_col3 = st.columns([1, 2, 1])
+            with revoke_page_col1:
+                if st.button("◀", key="revoke_prev"):
+                    st.session_state.revoke_page = max(0, st.session_state.revoke_page - 1)
+                    st.rerun()
+            with revoke_page_col2:
+                st.write(f"페이지 {st.session_state.revoke_page + 1}/{total_pages}")
+            with revoke_page_col3:
+                if st.button("▶", key="revoke_next"):
+                    st.session_state.revoke_page = min(total_pages - 1, st.session_state.revoke_page + 1)
+                    st.rerun()
+            
+            if st.form_submit_button("❌ 스탬프 회수", use_container_width=True):
+                if not target_email:
+                    st.error("❌ 대상 이메일을 입력하세요.")
+                elif not selected_stamp:
+                    st.error("❌ 회수할 스탬프를 선택하세요.")
+                else:
+                    with st.spinner("스탬프 회수 중..."):
+                        response = make_flask_request('/api/stamps', 'POST', {
+                            'target_email': target_email, 
+                            'booth_id': selected_stamp,
+                            'action': 'revoke'
+                        }, token)
+                        
+                        if response and response.status_code == 200:
+                            st.success(f"✅ {response.json().get('message')}")
+                        else:
+                            error_msg = response.json().get('message', '처리 실패') if response else '서버 연결 실패'
+                            st.error(f"❌ 스탬프 회수 실패: {error_msg}")
 
 def show_admin_features(token, user_info):
     """관리자 기능 표시"""
@@ -404,12 +507,12 @@ def show_admin_features(token, user_info):
                             error_msg = response.json().get('message', '처리 실패') if response else '서버 연결 실패'
                             st.error(f"❌ 역할 변경 실패: {error_msg}")
     
-    # ✅ 스탬프 관리 기능
+    # ✅ 스탬프 관리 기능 (페이지네이션 추가)
     st.subheader("🎫 스탬프 관리")
     
     if 'admin_users' in st.session_state and st.session_state.admin_users:
         with st.form("admin_stamp_management"):
-            col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
+            col1, col2 = st.columns([2, 3])
             
             with col1:
                 admin_target_user = st.selectbox(
@@ -417,37 +520,129 @@ def show_admin_features(token, user_info):
                     options=[user['이메일'] for user in users_for_display],
                     key="admin_user_select"
                 )
-            
-            with col2:
-                admin_booth_id = st.selectbox("부스 선택", STAMP_BOOTHS, key="admin_booth_select")
-            
-            with col3:
+                
                 admin_action = st.radio("작업", ["부여", "회수"], key="admin_action", horizontal=True)
             
-            with col4:
-                st.write("")
-                st.write("")
-                admin_submitted = st.form_submit_button("적용", use_container_width=True)
+            with col2:
+                # 페이지네이션으로 스탬프 선택
+                stamps_per_page = 12
+                total_pages = (len(STAMP_BOOTHS) + stamps_per_page - 1) // stamps_per_page
+                
+                st.write("스탬프 선택:")
+                admin_cols = st.columns(4)
+                start_idx = st.session_state.admin_stamp_page * stamps_per_page
+                end_idx = min(start_idx + stamps_per_page, len(STAMP_BOOTHS))
+                
+                selected_stamp = None
+                for i, booth in enumerate(STAMP_BOOTHS[start_idx:end_idx]):
+                    col_idx = i % 4
+                    with admin_cols[col_idx]:
+                        booth_number = booth.replace("booth", "")
+                        if st.button(f"부스 {booth_number}", key=f"admin_{booth}"):
+                            selected_stamp = booth
+                
+                # 페이지네이션 컨트롤
+                admin_page_col1, admin_page_col2, admin_page_col3 = st.columns([1, 2, 1])
+                with admin_page_col1:
+                    if st.button("◀", key="admin_prev"):
+                        st.session_state.admin_stamp_page = max(0, st.session_state.admin_stamp_page - 1)
+                        st.rerun()
+                with admin_page_col2:
+                    st.write(f"페이지 {st.session_state.admin_stamp_page + 1}/{total_pages}")
+                with admin_page_col3:
+                    if st.button("▶", key="admin_next"):
+                        st.session_state.admin_stamp_page = min(total_pages - 1, st.session_state.admin_stamp_page + 1)
+                        st.rerun()
+            
+            admin_submitted = st.form_submit_button("적용", use_container_width=True)
             
             if admin_submitted and admin_target_user:
-                action_type = "grant" if admin_action == "부여" else "revoke"
-                with st.spinner("스탬프 변경 중..."):
-                    response = make_flask_request('/api/stamps', 'POST', {
-                        'target_email': admin_target_user, 
-                        'booth_id': admin_booth_id,
-                        'action': action_type
-                    }, token)
-                    
-                    if response and response.status_code == 200:
-                        st.success(f"✅ {response.json().get('message')}")
-                        # 목록 새로고침
-                        response = make_flask_request('/api/users', 'GET', token=token)
+                if not selected_stamp:
+                    st.error("❌ 스탬프를 선택하세요.")
+                else:
+                    action_type = "grant" if admin_action == "부여" else "revoke"
+                    with st.spinner("스탬프 변경 중..."):
+                        response = make_flask_request('/api/stamps', 'POST', {
+                            'target_email': admin_target_user, 
+                            'booth_id': selected_stamp,
+                            'action': action_type
+                        }, token)
+                        
                         if response and response.status_code == 200:
-                            st.session_state.admin_users = response.json().get('users', [])
-                        st.rerun()
-                    else:
-                        error_msg = response.json().get('message', '처리 실패') if response else '서버 연결 실패'
-                        st.error(f"❌ 스탬프 변경 실패: {error_msg}")
+                            st.success(f"✅ {response.json().get('message')}")
+                            # 목록 새로고침
+                            response = make_flask_request('/api/users', 'GET', token=token)
+                            if response and response.status_code == 200:
+                                st.session_state.admin_users = response.json().get('users', [])
+                            st.rerun()
+                        else:
+                            error_msg = response.json().get('message', '처리 실패') if response else '서버 연결 실패'
+                            st.error(f"❌ 스탬프 변경 실패: {error_msg}")
+
+def show_main_page():
+    """메인 페이지 표시 - 상단 버튼 추가"""
+    token = st.session_state.auth_token
+    user_info = st.session_state.user_info
+    
+    # 상단 바
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        st.title(f"👋 {user_info['display_name']}님, 환영합니다!")
+        
+        # 스탬프 개수 계산
+        stamp_count = sum(1 for booth, has_stamp in user_info.get('stamps', {}).items() if has_stamp)
+        total_booths = len(STAMP_BOOTHS)
+        
+        st.write(f"**역할:** {user_info['role']} | **스탬프:** {stamp_count}/{total_booths}")
+        
+    with col2:
+        if st.button("🚪 로그아웃"):
+            logout_js = """
+            <script>
+            localStorage.removeItem('stamp_auth');
+            </script>
+            """
+            html(logout_js, height=0)
+            
+            st.session_state.auth_token = None
+            st.session_state.user_info = None
+            st.session_state.logout_triggered = True
+            st.rerun()
+    
+    # ✅ 새로운 상단 버튼들
+    st.markdown("---")
+    col_btn1, col_btn2 = st.columns(2)
+    
+    with col_btn1:
+        if st.button("📅 발표 일정 보기", use_container_width=True, key="schedule_btn"):
+            st.session_state.show_schedule = True
+            st.session_state.show_clubs = False
+    
+    with col_btn2:
+        if st.button("🏫 동아리 목록", use_container_width=True, key="clubs_btn"):
+            st.session_state.show_schedule = False
+            st.session_state.show_clubs = True
+    
+    # 발표 일정 보기
+    if st.session_state.get('show_schedule', False):
+        show_schedule_section()
+        
+    # 동아리 목록 보기
+    if st.session_state.get('show_clubs', False):
+        show_clubs_section()
+    
+    st.divider()
+    
+    # 기존 기능들
+    show_student_features(token, user_info)
+    
+    if user_info['role'] in ['manager', 'admin']:
+        st.divider()
+        show_manager_features(token, user_info)
+    
+    if user_info['role'] == 'admin':
+        st.divider()
+        show_admin_features(token, user_info)
 
 def main():
     """메인 앱 함수"""
