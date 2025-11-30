@@ -1,4 +1,4 @@
-# flask_auth_server.py (Render 배포용)
+# flask_auth_server.py
 from flask_cors import CORS
 from flask import Flask, request, jsonify
 import firebase_admin
@@ -12,42 +12,42 @@ import json
 # Flask 앱 생성
 app = Flask(__name__)
 
-# ✅ Render 환경에서의 CORS 설정
+# ✅ CORS 설정
 allowed_origins = [
     "http://localhost:8501",
     "https://jeohyeonweb.firebaseapp.com",
     "https://jeohyeonweb.web.app",
-    # 추후 Streamlit Cloud 배포 시 여기에 URL 추가
 ]
 
 CORS(app, origins=allowed_origins)
 
-# ✅ Render 환경 변수 사용
+# ✅ 환경 변수 사용
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'fallback-secret-key-for-development')
+
+# ✅ 스탬프 부스 목록 정의
+STAMP_BOOTHS = [
+    "booth1", "booth2", "booth3", "booth4", "booth5",
+    "booth6", "booth7", "booth8", "booth9", "booth10"
+]
 
 # Firebase Admin SDK 초기화 함수
 def initialize_firebase():
     try:
-        # ✅ Render 환경 변수에서 서비스 계정 정보 읽기
         service_account_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON')
         
         if service_account_json:
-            # 환경 변수에서 JSON 문자열 읽기
+            # JSON 문자열을 파이썬 딕셔너리로 변환
             service_account_info = json.loads(service_account_json)
             cred = credentials.Certificate(service_account_info)
             firebase_admin.initialize_app(cred)
             print("✅ Firebase Admin SDK initialized from environment variables")
             return True
         else:
-            # ✅ 로컬 개발용: 서비스 계정 파일 사용
-            try:
-                cred = credentials.Certificate("serviceAccountKey.json")
-                firebase_admin.initialize_app(cred)
-                print("✅ Firebase Admin SDK initialized from service account file")
-                return True
-            except FileNotFoundError:
-                print("❌ serviceAccountKey.json 파일을 찾을 수 없습니다.")
-                return False
+            print("❌ FIREBASE_SERVICE_ACCOUNT_JSON environment variable not found")
+            return False
+    except Exception as e:
+        print(f"❌ Firebase initialization failed: {e}")
+        return False
                 
     except Exception as e:
         print(f"❌ Firebase initialization failed: {e}")
@@ -106,27 +106,41 @@ def token_required(f):
 # 사용자 프로필 초기화/조회 함수
 def init_or_get_user_profile(user_uid, email, name):
     if not db:
-        # 특정 이메일은 관리자로, 나머지는 학생으로 설정
         default_role = 'admin' if email == '2411224@jeohyeon.hs.kr' else 'student'
-        return {'email': email, 'display_name': name, 'honyangi': 100, 'role': default_role}
+        # 기본 스탬프 구조 생성 (모두 false)
+        default_stamps = {booth: False for booth in STAMP_BOOTHS}
+        return {
+            'email': email, 
+            'display_name': name, 
+            'stamps': default_stamps,
+            'role': default_role
+        }
     
     try:
         user_ref = db.collection('users').document(user_uid)
         user_doc = user_ref.get()
         if user_doc.exists:
             user_data = user_doc.to_dict()
+            # 기존 사용자의 stamps 필드가 없으면 생성
+            if 'stamps' not in user_data:
+                default_stamps = {booth: False for booth in STAMP_BOOTHS}
+                user_data['stamps'] = default_stamps
+                user_ref.update({'stamps': default_stamps})
             return user_data
         else:
-            # 새 사용자 생성 시 특정 이메일은 관리자로, 나머지는 학생으로 설정
+            # 새 사용자 생성
             if email == '2411224@jeohyeon.hs.kr':
                 role = 'admin'
             else:
                 role = 'student'
             
+            # 기본 스탬프 구조 생성
+            default_stamps = {booth: False for booth in STAMP_BOOTHS}
+            
             new_user = {
                 'email': email,
                 'display_name': name or email.split('@')[0],
-                'honyangi': 100,
+                'stamps': default_stamps,
                 'role': role,
                 'created_at': firestore.SERVER_TIMESTAMP
             }
@@ -134,11 +148,16 @@ def init_or_get_user_profile(user_uid, email, name):
             return new_user
     except Exception as e:
         print(f"User profile error: {e}")
-        # 오류 발생 시 기본값 반환
         default_role = 'admin' if email == '2411224@jeohyeon.hs.kr' else 'student'
-        return {'email': email, 'display_name': name, 'honyangi': 100, 'role': default_role}
+        default_stamps = {booth: False for booth in STAMP_BOOTHS}
+        return {
+            'email': email, 
+            'display_name': name, 
+            'stamps': default_stamps,
+            'role': default_role
+        }
 
-# ✅ 상태 확인 엔드포인트 추가 (Render 건강 검사용)
+# ✅ 상태 확인 엔드포인트
 @app.route('/health', methods=['GET'])
 def health_check():
     return jsonify({
@@ -196,7 +215,7 @@ def login():
                 'email': email,
                 'display_name': user_profile['display_name'],
                 'role': user_profile['role'],
-                'honyangi': user_profile['honyangi']
+                'stamps': user_profile['stamps']
             }
         }), 200
         
@@ -227,12 +246,13 @@ def get_profile(current_user):
                 return jsonify({'user': user_data}), 200
         
         # DB에 없거나 오류 시 현재 사용자 정보 반환
+        default_stamps = {booth: False for booth in STAMP_BOOTHS}
         return jsonify({
             'user': {
                 'email': current_user['email'],
                 'display_name': current_user.get('display_name', current_user['email'].split('@')[0]),
                 'role': current_user['role'],
-                'honyangi': 100
+                'stamps': default_stamps
             }
         }), 200
         
@@ -260,19 +280,26 @@ def update_profile(current_user):
         print(f"Profile update error: {e}")
         return jsonify({'message': str(e)}), 500
 
-# ✅ 호냥이 관리 API
-@app.route('/api/honyangi', methods=['POST'])
+# ✅ 스탬프 관리 API
+@app.route('/api/stamps', methods=['POST'])
 @token_required
-def update_honyangi(current_user):
+def update_stamps(current_user):
     if current_user['role'] not in ['manager', 'admin']:
         return jsonify({'message': '권한이 없습니다.'}), 403
     
     data = request.json
     target_email = data.get('target_email')
-    amount = data.get('amount')
+    booth_id = data.get('booth_id')
+    action = data.get('action')  # 'grant' 또는 'revoke'
     
-    if not target_email or amount is None:
-        return jsonify({'message': 'target_email과 amount는 필수 입력값입니다.'}), 400
+    if not target_email or not booth_id or not action:
+        return jsonify({'message': 'target_email, booth_id, action은 필수 입력값입니다.'}), 400
+    
+    if booth_id not in STAMP_BOOTHS:
+        return jsonify({'message': '유효하지 않은 부스 ID입니다.'}), 400
+    
+    if action not in ['grant', 'revoke']:
+        return jsonify({'message': 'action은 grant 또는 revoke만 가능합니다.'}), 400
     
     try:
         if not db:
@@ -288,19 +315,23 @@ def update_honyangi(current_user):
             
         target_doc = target_docs[0]
         target_data = target_doc.to_dict()
-        new_amount = target_data.get('honyangi', 0) + amount
         
-        # 호냥이 음수 방지
-        if new_amount < 0:
-            return jsonify({'message': '호냥이는 0보다 작아질 수 없습니다.'}), 400
-            
-        target_doc.reference.update({'honyangi': new_amount})
+        # 스탬프 업데이트
+        new_stamps = target_data.get('stamps', {})
+        if action == 'grant':
+            new_stamps[booth_id] = True
+        else:  # revoke
+            new_stamps[booth_id] = False
+        
+        target_doc.reference.update({'stamps': new_stamps})
+        
+        action_text = "부여" if action == 'grant' else "회수"
         return jsonify({
-            'message': f'{target_email}의 호냥이를 {amount} 변경했습니다. 현재: {new_amount}'
+            'message': f'{target_email}에게 {booth_id} 스탬프를 {action_text}했습니다.'
         }), 200
         
     except Exception as e:
-        print(f"Honyangi update error: {e}")
+        print(f"Stamps update error: {e}")
         return jsonify({'message': str(e)}), 500
 
 # ✅ 역할 변경 API
@@ -355,6 +386,9 @@ def get_all_users(current_user):
         for doc in docs:
             user_data = doc.to_dict()
             user_data['id'] = doc.id
+            # stamps 필드가 없으면 기본값 설정
+            if 'stamps' not in user_data:
+                user_data['stamps'] = {booth: False for booth in STAMP_BOOTHS}
             users.append(user_data)
         
         return jsonify({'users': users}), 200
@@ -362,6 +396,12 @@ def get_all_users(current_user):
     except Exception as e:
         print(f"Get users error: {e}")
         return jsonify({'message': str(e)}), 500
+
+# ✅ 부스 목록 조회 API
+@app.route('/api/booths', methods=['GET'])
+@token_required
+def get_booths(current_user):
+    return jsonify({'booths': STAMP_BOOTHS}), 200
 
 # ✅ Render에서 실행 시 Gunicorn 사용
 if __name__ == '__main__':
