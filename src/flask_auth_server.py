@@ -36,18 +36,32 @@ def initialize_firebase():
         service_account_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON')
         
         if service_account_json:
+<<<<<<< HEAD
             # JSON 문자열을 파이썬 딕셔너리로 변환
+=======
+>>>>>>> b3ff62bb3aef80a9ad23bb8f975386b52152ffbf
             service_account_info = json.loads(service_account_json)
             cred = credentials.Certificate(service_account_info)
             firebase_admin.initialize_app(cred)
             print("✅ Firebase Admin SDK initialized from environment variables")
             return True
         else:
+<<<<<<< HEAD
             print("❌ FIREBASE_SERVICE_ACCOUNT_JSON environment variable not found")
             return False
     except Exception as e:
         print(f"❌ Firebase initialization failed: {e}")
         return False
+=======
+            try:
+                cred = credentials.Certificate("serviceAccountKey.json")
+                firebase_admin.initialize_app(cred)
+                print("✅ Firebase Admin SDK initialized from service account file")
+                return True
+            except FileNotFoundError:
+                print("❌ serviceAccountKey.json 파일을 찾을 수 없습니다.")
+                return False
+>>>>>>> b3ff62bb3aef80a9ad23bb8f975386b52152ffbf
                 
     except Exception as e:
         print(f"❌ Firebase initialization failed: {e}")
