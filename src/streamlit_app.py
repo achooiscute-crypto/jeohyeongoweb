@@ -11,11 +11,10 @@ import json
 
 load_dotenv()
 
-# Flask 서버 기본 URL
-FLASK_SERVER_URL = "https://jeohyeon-academic-web.onrender.com/"  # 실제 render 서버
-
-# Firebase 호스팅된 인증 페이지 URL
+# ✅ URL 수정 (슬래시 제거)
+FLASK_SERVER_URL = "https://jeohyeon-academic-web.onrender.com"  # 슬래시 제거
 FIREBASE_AUTH_URL = "https://jeohyeonweb.firebaseapp.com"
+STREAMLIT_APP_URL = "https://jeohyeongoweb.streamlit.app"  # 새 변수 추가
 
 # 스탬프 부스 목록 (백엔드와 동일하게 유지)
 STAMP_BOOTHS = [
@@ -107,41 +106,47 @@ def show_login_page():
     
     # ✅ 쿼리 파라미터에서 토큰 자동 처리 (로그아웃 상태에서만)
     if 'token' in st.query_params and not st.session_state.auth_token:
-        # 로그아웃 직후인지 확인
         if 'logout_triggered' not in st.session_state or not st.session_state.logout_triggered:
             id_token = st.query_params['token']
             st.info("🔐 토큰을 받았습니다. 로그인 처리 중...")
             
-            # Flask 서버로 토큰 검증 요청
             response = make_flask_request('/api/login', 'POST', {'id_token': id_token})
             
             if response and response.status_code == 200:
                 data = response.json()
                 st.session_state.auth_token = data['access_token']
                 st.session_state.user_info = data['user']
-                st.query_params.clear()  # 토큰 제거
+                st.query_params.clear()
                 st.rerun()
             else:
                 error_msg = response.json().get('message', '로그인 실패') if response else '서버 연결 실패'
                 st.error(f"❌ 로그인 실패: {error_msg}")
         else:
-            # 로그아웃 직후면 토큰 무시하고 제거
             st.query_params.clear()
 
     if not st.session_state.auth_token:
         st.success("학교 구글 계정(@jeohyeon.hs.kr)으로 로그인해 주세요.")
         
-        # ✅ 간결한 로그인 UI
         col1, col2 = st.columns([1, 1])
         
         with col1:
             st.subheader("로그인")
-            if st.button("🚪 **Google 로그인**", 
-                        type="primary", 
-                        use_container_width=True,
-                        key="main_login"):
-                webbrowser.open_new(FIREBASE_AUTH_URL)
-                st.info("로그인 페이지가 열립니다. 로그인을 완료해주세요.")
+            
+            # ✅ 수정: JavaScript로 새 창 열기
+            login_js = f"""
+            <script>
+            function openAuthPage() {{
+                window.open("{FIREBASE_AUTH_URL}", "_blank");
+            }}
+            </script>
+            <button onclick="openAuthPage()" 
+                    style="padding: 15px 30px; font-size: 16px; background: #FF4B4B; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
+                🚪 Google 로그인
+            </button>
+            """
+            html(login_js, height=100)
+            
+            st.info("로그인 페이지가 새 창에서 열립니다.")
         
         with col2:
             st.subheader("도움말")
@@ -160,15 +165,24 @@ def show_login_page():
                 else:
                     st.warning("토큰을 입력해주세요.")
 
-        # JavaScript 메시지 처리
-        auth_js = """
+        # ✅ 메시지 리스너 업데이트
+        auth_js = f"""
         <script>
-        window.addEventListener('message', function(event) {
+        window.addEventListener('message', function(event) {{
             if (event.origin === "https://jeohyeonweb.firebaseapp.com" && 
-                event.data.type === 'FIREBASE_ID_TOKEN') {
-                window.location.href = 'https://jeohyeongoweb.streamlit.app/?token=' + encodeURIComponent(event.data.token);
-            }
-        });
+                event.data.type === 'FIREBASE_ID_TOKEN') {{
+                window.location.href = '{STREAMLIT_APP_URL}?token=' + encodeURIComponent(event.data.token);
+            }}
+        }});
+        
+        // 페이지 로드 시 로그인 상태 확인
+        window.addEventListener('load', function() {{
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('token')) {{
+                // 토큰이 있으면 자동 처리
+                console.log('Token found in URL');
+            }}
+        }});
         </script>
         """
         html(auth_js, height=0)

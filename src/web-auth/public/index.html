@@ -11,30 +11,64 @@
         font-family: "Malgun Gothic", sans-serif;
         text-align: center;
         padding: 50px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+      }
+      .container {
+        background: white;
+        padding: 40px;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        color: #333;
+        max-width: 500px;
+        width: 100%;
       }
       button {
         padding: 15px 30px;
         font-size: 16px;
         cursor: pointer;
         margin-top: 20px;
+        background: #4285f4;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        transition: all 0.3s;
+      }
+      button:hover {
+        background: #3367d6;
+        transform: translateY(-2px);
       }
       #message {
         margin-top: 20px;
-        color: #666;
       }
       .success-box {
         background: #f0f8ff;
         padding: 20px;
         border-radius: 10px;
         margin: 20px 0;
+        border-left: 4px solid #4285f4;
+      }
+      .error-box {
+        background: #ffebee;
+        padding: 20px;
+        border-radius: 10px;
+        margin: 20px 0;
+        border-left: 4px solid #f44336;
       }
     </style>
   </head>
   <body>
-    <h1>학교 웹사이트 로그인</h1>
-    <p>Google 계정으로 로그인해 주세요.</p>
-    <button onclick="signInWithGoogle()">Google로 로그인</button>
-    <div id="message"></div>
+    <div class="container">
+      <h1>🏫 학교 웹사이트 로그인</h1>
+      <p>Google 계정으로 로그인해 주세요.</p>
+      <button onclick="signInWithGoogle()">Google로 로그인</button>
+      <div id="message"></div>
+    </div>
 
     <script>
       // Firebase 구성 정보
@@ -53,7 +87,6 @@
       const auth = firebase.auth();
       firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION);
 
-      // ✅ 단일 함수로 통합
       function signInWithGoogle() {
         const provider = new firebase.auth.GoogleAuthProvider();
         provider.setCustomParameters({
@@ -68,32 +101,19 @@
             return result.user.getIdToken();
           })
           .then((idToken) => {
-            // ✅ 자동 리다이렉트 로직 개선
-            const streamlitAppUrl = "https://jeohyeongoweb.streamlit.app/";
+            // ✅ Streamlit 앱 URL
+            const streamlitAppUrl = "https://jeohyeongoweb.streamlit.app";
 
-            // 먼저 메시지 전송 시도 (팝업인 경우)
-            if (window.opener) {
-              window.opener.postMessage(
-                {
-                  type: "FIREBASE_ID_TOKEN",
-                  token: idToken,
-                },
-                "*"
-              );
-            }
-
-            // ✅ 3초 후 자동으로 Streamlit 앱으로 리다이렉트
             document.getElementById("message").innerHTML = `
                         <div class="success-box">
                             <h3>✅ 로그인 성공!</h3>
                             <p>3초 후 자동으로 이동합니다...</p>
                             <p>자동 이동이 안될 경우:</p>
-                            <button onclick="redirectToStreamlit('${idToken}')" 
-                                    style="padding: 10px 20px; background: #4285f4; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 5px;">
+                            <button onclick="redirectToStreamlit('${idToken}')">
                                 바로 이동하기
                             </button>
                             <button onclick="copyToken('${idToken}')" 
-                                    style="padding: 10px 20px; background: #34a853; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 5px;">
+                                    style="background: #34a853; margin-left: 10px;">
                                 토큰 복사하기
                             </button>
                         </div>
@@ -107,7 +127,7 @@
           .catch((error) => {
             console.error("로그인 오류:", error);
             document.getElementById("message").innerHTML = `
-                        <div style="background: #ffebee; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                        <div class="error-box">
                             <h3>❌ 로그인 실패</h3>
                             <p>오류: ${error.message}</p>
                             <button onclick="location.reload()">다시 시도하기</button>
@@ -116,14 +136,12 @@
           });
       }
 
-      // ✅ 리다이렉트 함수
       function redirectToStreamlit(token) {
-        window.location.href = `https://jeohyeongoweb.streamlit.app/?token=${encodeURIComponent(
+        window.location.href = `https://jeohyeongoweb.streamlit.app?token=${encodeURIComponent(
           token
         )}`;
       }
 
-      // ✅ 토큰 복사 함수
       function copyToken(token) {
         navigator.clipboard.writeText(token).then(() => {
           alert(
@@ -131,6 +149,16 @@
           );
         });
       }
+
+      // ✅ 페이지 로드 시 자동 리다이렉트 체크 (이미 로그인된 경우)
+      auth.onAuthStateChanged((user) => {
+        if (user) {
+          user.getIdToken().then((idToken) => {
+            console.log("Already logged in, redirecting...");
+            redirectToStreamlit(idToken);
+          });
+        }
+      });
     </script>
   </body>
 </html>

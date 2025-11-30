@@ -17,7 +17,7 @@ allowed_origins = [
     "http://localhost:8501",
     "https://jeohyeonweb.firebaseapp.com",
     "https://jeohyeonweb.web.app",
-    "https://jeohyeongoweb.streamlit.app/",
+    "https://jeohyeongoweb.streamlit.app",
 
 ]
 
