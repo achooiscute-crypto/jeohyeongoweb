@@ -12,10 +12,16 @@ import json
 load_dotenv()
 
 # Flask 서버 기본 URL
-FLASK_SERVER_URL = "https://jeohyeongoweb-flask.onrender.com"
+FLASK_SERVER_URL = "http://localhost:5000"  # 로컬 테스트용
 
 # Firebase 호스팅된 인증 페이지 URL
 FIREBASE_AUTH_URL = "https://jeohyeonweb.firebaseapp.com"
+
+# 스탬프 부스 목록 (백엔드와 동일하게 유지)
+STAMP_BOOTHS = [
+    "booth1", "booth2", "booth3", "booth4", "booth5",
+    "booth6", "booth7", "booth8", "booth9", "booth10"
+]
 
 # Streamlit 세션 상태 초기화
 if 'auth_token' not in st.session_state:
@@ -65,7 +71,6 @@ def verify_token(token):
         st.session_state.user_info = None
         return None
 
-# ✅ 중요: handle_login_callback 함수를 실제 Flask 통신으로 변경
 def handle_login_callback(id_token):
     """Flask 서버로 ID 토큰을 전송하여 실제 로그인 처리"""
     response = make_flask_request('/api/login', 'POST', {'id_token': id_token})
@@ -74,14 +79,14 @@ def handle_login_callback(id_token):
         st.session_state.auth_token = data['access_token']
         st.session_state.user_info = data['user']
         
-        # ✅ LocalStorage에 로그인 정보 저장 (새로고침 후에도 상태 유지)
+        # ✅ LocalStorage에 로그인 정보 저장
         save_auth_js = f"""
         <script>
         var authData = {{
             token: "{data['access_token']}",
             user: {json.dumps(data['user'])}
         }};
-        localStorage.setItem('honyangi_auth', JSON.stringify(authData));
+        localStorage.setItem('stamp_auth', JSON.stringify(authData));
         </script>
         """
         html(save_auth_js, height=0)
@@ -131,10 +136,9 @@ def show_login_page():
         
         with col1:
             st.subheader("로그인")
-            # ✅ use_container_width 대신 width 사용 (경고 메시지 해결)
             if st.button("🚪 **Google 로그인**", 
                         type="primary", 
-                        width='stretch',  # ✅ use_container_width=True 대체
+                        use_container_width=True,
                         key="main_login"):
                 webbrowser.open_new(FIREBASE_AUTH_URL)
                 st.info("로그인 페이지가 열립니다. 로그인을 완료해주세요.")
@@ -150,8 +154,7 @@ def show_login_page():
         # ✅ 간소화된 수동 로그인
         with st.expander("🛠️ 수동 로그인 (문제 발생 시)"):
             manual_token = st.text_area("토큰을 여기에 붙여넣으세요", height=80)
-            # ✅ use_container_width 대신 width 사용
-            if st.button("🔐 수동 로그인", width='stretch'):  # ✅ use_container_width=True 대체
+            if st.button("🔐 수동 로그인", use_container_width=True):
                 if manual_token.strip():
                     handle_login_callback(manual_token.strip())
                 else:
@@ -179,13 +182,24 @@ def show_main_page():
     col1, col2 = st.columns([4, 1])
     with col1:
         st.title(f"👋 {user_info['display_name']}님, 환영합니다!")
-        st.write(f"**역할:** {user_info['role']} | **보유 호냥이:** {user_info.get('honyangi', 0)}")
+        
+        # 스탬프 개수 계산
+        stamp_count = sum(1 for booth, has_stamp in user_info.get('stamps', {}).items() if has_stamp)
+        total_booths = len(STAMP_BOOTHS)
+        
+        st.write(f"**역할:** {user_info['role']} | **스탬프:** {stamp_count}/{total_booths}")
+        
+        # 진행률 표시줄
+        progress = stamp_count / total_booths if total_booths > 0 else 0
+        st.progress(progress)
+        st.caption(f"스탬프 진행률: {stamp_count}/{total_booths} ({progress:.1%})")
+        
     with col2:
         if st.button("🚪 로그아웃"):
             # ✅ LocalStorage에서 인증 정보 제거
             logout_js = """
             <script>
-            localStorage.removeItem('honyangi_auth');
+            localStorage.removeItem('stamp_auth');
             </script>
             """
             html(logout_js, height=0)
@@ -210,75 +224,107 @@ def show_main_page():
 
 def show_student_features(token, user_info):
     """학생 기능 표시"""
-    st.header("📝 학생 메뉴")
+    st.header("🎫 나의 스탬프 현황")
     
-    # 호냥이 잔액 카드 표시
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("💰 보유 호냥이", f"{user_info.get('honyangi', 0)} 호냥")
-    with col2:
-        st.metric("🎯 역할", user_info['role'])
-    with col3:
-        st.metric("📧 이메일", user_info['email'])
+    # 스탬프 그리드 표시
+    stamps = user_info.get('stamps', {})
     
-    # ✅ 프로필 이름 수정 기능 제거 - 대신 현재 정보 표시
+    # 5열 그리드로 스탬프 표시
+    cols = st.columns(5)
+    for i, booth in enumerate(STAMP_BOOTHS):
+        col_idx = i % 5
+        has_stamp = stamps.get(booth, False)
+        
+        with cols[col_idx]:
+            # 스탬프 모양 (동그란 버튼 형태)
+            if has_stamp:
+                st.markdown(
+                    f"""
+                    <div style='
+                        width: 80px; 
+                        height: 80px; 
+                        border-radius: 50%; 
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        display: flex; 
+                        align-items: center; 
+                        justify-content: center; 
+                        color: white; 
+                        font-weight: bold;
+                        margin: 10px auto;
+                        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+                    '>
+                        ✓
+                    </div>
+                    """, 
+                    unsafe_allow_html=True
+                )
+                st.success(f"**{booth}**")
+            else:
+                st.markdown(
+                    f"""
+                    <div style='
+                        width: 80px; 
+                        height: 80px; 
+                        border-radius: 50%; 
+                        background: #f0f0f0;
+                        border: 2px dashed #ccc;
+                        display: flex; 
+                        align-items: center; 
+                        justify-content: center; 
+                        color: #999; 
+                        margin: 10px auto;
+                    '>
+                        ?
+                    </div>
+                    """, 
+                    unsafe_allow_html=True
+                )
+                st.info(f"**{booth}**")
+    
+    # 프로필 정보
     with st.expander("👤 내 프로필 정보"):
         st.write(f"**표시 이름:** {user_info.get('display_name', '이름 없음')}")
         st.write(f"**이메일:** {user_info['email']}")
+        st.write(f"**역할:** {user_info['role']}")
         st.write(f"**가입일:** {user_info.get('created_at', '알 수 없음')}")
-    
-    # 호냥이 내역 조회 (간단한 버전)
-    with st.expander("📊 호냥이 사용 내역"):
-        st.info("호냥이 내역 기능은 추후 구현 예정입니다.")
 
 def show_manager_features(token, user_info):
     """부장 기능 표시"""
-    st.header("💰 부장 메뉴 - 호냥이 관리")
+    st.header("🔄 부스 스탬프 관리")
     
-    with st.form("honyangi_form"):
-        st.subheader("호냥이 지급/차감")
+    with st.form("stamp_management_form"):
+        st.subheader("스탬프 부여/회수")
         
-        # 대상 사용자 선택 (관리자인 경우 모든 사용자, 부장인 경우 학생만)
+        # 대상 사용자 입력
         target_email = st.text_input("대상 학생 이메일", placeholder="2411224@jeohyeon.hs.kr")
         
-        col1, col2 = st.columns(2)
-        with col1:
-            amount = st.number_input("변경 금액", min_value=-1000, max_value=1000, value=10, step=10)
-        with col2:
-            st.write("**작업 유형**")
-            if amount > 0:
-                st.success(f"🎁 {amount} 호냥이 지급")
-            elif amount < 0:
-                st.error(f"⚠️ {abs(amount)} 호냥이 차감")
-            else:
-                st.info("🔁 금액을 입력하세요")
+        # 부스 선택
+        booth_id = st.selectbox("부스 선택", STAMP_BOOTHS)
         
-        submitted = st.form_submit_button("✅ 호냥이 적용")
+        # 작업 선택
+        action = st.radio("작업 선택", ["부여하기 🎫", "회수하기 ❌"], horizontal=True)
+        
+        action_type = "grant" if action == "부여하기 🎫" else "revoke"
+        action_text = "부여" if action_type == "grant" else "회수"
+        
+        submitted = st.form_submit_button(f"✅ 스탬프 {action_text}")
         
         if submitted:
             if not target_email:
                 st.error("❌ 대상 이메일을 입력하세요.")
-            elif amount == 0:
-                st.warning("⚠️ 0 이외의 금액을 입력하세요.")
             else:
-                with st.spinner("호냥이 변경 중..."):
-                    response = make_flask_request('/api/honyangi', 'POST', {
+                with st.spinner("스탬프 변경 중..."):
+                    response = make_flask_request('/api/stamps', 'POST', {
                         'target_email': target_email, 
-                        'amount': amount
+                        'booth_id': booth_id,
+                        'action': action_type
                     }, token)
                     
                     if response and response.status_code == 200:
                         st.success(f"✅ {response.json().get('message')}")
-                        
-                        # 현재 사용자 정보 갱신 (만약 자신에게 적용한 경우)
-                        if target_email == user_info['email']:
-                            profile_response = make_flask_request('/api/profile', 'GET', token=token)
-                            if profile_response and profile_response.status_code == 200:
-                                st.session_state.user_info = profile_response.json().get('user', user_info)
-                                st.rerun()
                     else:
                         error_msg = response.json().get('message', '처리 실패') if response else '서버 연결 실패'
-                        st.error(f"❌ 호냥이 변경 실패: {error_msg}")
+                        st.error(f"❌ 스탬프 변경 실패: {error_msg}")
 
 def show_admin_features(token, user_info):
     """관리자 기능 표시"""
@@ -297,14 +343,16 @@ def show_admin_features(token, user_info):
         # 사용자 목록 테이블
         users_for_display = []
         for user in st.session_state.admin_users:
+            stamps = user.get('stamps', {})
+            stamp_count = sum(1 for has_stamp in stamps.values() if has_stamp)
             users_for_display.append({
                 '이메일': user.get('email', '이메일 없음'),
                 '이름': user.get('display_name', '이름 없음'),
                 '역할': user.get('role', 'student'),
-                '호냥이': user.get('honyangi', 0)
+                '스탬프': f"{stamp_count}/{len(STAMP_BOOTHS)}"
             })
         
-        st.dataframe(users_for_display, width='stretch')
+        st.dataframe(users_for_display, use_container_width=True)
         
         # ✅ 빠른 역할 변경
         st.subheader("🔄 빠른 역할 변경")
@@ -323,8 +371,7 @@ def show_admin_features(token, user_info):
         with col3:
             st.write("")  # 공백
             st.write("")  # 공백
-            # ✅ use_container_width 대신 width 사용
-            if st.button("🚀 역할 변경", type="primary", width='stretch'):  # ✅ use_container_width=True 대체
+            if st.button("🚀 역할 변경", type="primary", use_container_width=True):
                 if selected_user:
                     with st.spinner("역할 변경 중..."):
                         response = make_flask_request('/api/role', 'POST', {
@@ -343,45 +390,50 @@ def show_admin_features(token, user_info):
                             error_msg = response.json().get('message', '처리 실패') if response else '서버 연결 실패'
                             st.error(f"❌ 역할 변경 실패: {error_msg}")
     
-    # ✅ 호냥이 초기화 기능 추가
-    st.subheader("💰 호냥이 관리")
+    # ✅ 스탬프 관리 기능
+    st.subheader("🎫 스탬프 관리")
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        with st.form("reset_honyangi"):
-            st.write("**호냥이 초기화**")
-            reset_email = st.selectbox(
-                "대상 선택",
-                options=[user['이메일'] for user in users_for_display] if 'admin_users' in st.session_state else [],
-                key="reset_select"
-            )
-            reset_amount = st.number_input("초기화 금액", min_value=0, max_value=1000, value=100, key="reset_amount")
+    if 'admin_users' in st.session_state and st.session_state.admin_users:
+        with st.form("admin_stamp_management"):
+            col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
             
-            if st.form_submit_button("🔄 호냥이 초기화"):
-                if reset_email:
-                    # 현재 호냥이 조회
-                    current_response = make_flask_request('/api/users', 'GET', token=token)
-                    if current_response and current_response.status_code == 200:
-                        users = current_response.json().get('users', [])
-                        target_user = next((u for u in users if u.get('email') == reset_email), None)
-                        if target_user:
-                            current_amount = target_user.get('honyangi', 0)
-                            difference = reset_amount - current_amount
-                            
-                            # 호냥이 조정
-                            adjust_response = make_flask_request('/api/honyangi', 'POST', {
-                                'target_email': reset_email, 
-                                'amount': difference
-                            }, token)
-                            
-                            if adjust_response and adjust_response.status_code == 200:
-                                st.success(f"✅ {reset_email}의 호냥이를 {reset_amount}로 초기화했습니다.")
-                                # 목록 새로고침
-                                response = make_flask_request('/api/users', 'GET', token=token)
-                                if response and response.status_code == 200:
-                                    st.session_state.admin_users = response.json().get('users', [])
-                                st.rerun()
+            with col1:
+                admin_target_user = st.selectbox(
+                    "대상 사용자",
+                    options=[user['이메일'] for user in users_for_display],
+                    key="admin_user_select"
+                )
+            
+            with col2:
+                admin_booth_id = st.selectbox("부스 선택", STAMP_BOOTHS, key="admin_booth_select")
+            
+            with col3:
+                admin_action = st.radio("작업", ["부여", "회수"], key="admin_action", horizontal=True)
+            
+            with col4:
+                st.write("")
+                st.write("")
+                admin_submitted = st.form_submit_button("적용", use_container_width=True)
+            
+            if admin_submitted and admin_target_user:
+                action_type = "grant" if admin_action == "부여" else "revoke"
+                with st.spinner("스탬프 변경 중..."):
+                    response = make_flask_request('/api/stamps', 'POST', {
+                        'target_email': admin_target_user, 
+                        'booth_id': admin_booth_id,
+                        'action': action_type
+                    }, token)
+                    
+                    if response and response.status_code == 200:
+                        st.success(f"✅ {response.json().get('message')}")
+                        # 목록 새로고침
+                        response = make_flask_request('/api/users', 'GET', token=token)
+                        if response and response.status_code == 200:
+                            st.session_state.admin_users = response.json().get('users', [])
+                        st.rerun()
+                    else:
+                        error_msg = response.json().get('message', '처리 실패') if response else '서버 연결 실패'
+                        st.error(f"❌ 스탬프 변경 실패: {error_msg}")
 
 def main():
     """메인 앱 함수"""
@@ -397,7 +449,7 @@ def main():
         # LocalStorage에서 로그인 정보 가져오기 시도
         auth_data_json = """
         <script>
-        var authData = localStorage.getItem('honyangi_auth');
+        var authData = localStorage.getItem('stamp_auth');
         if (authData) {
             window.parent.postMessage({type: 'RESTORE_AUTH', data: authData}, '*');
         }
