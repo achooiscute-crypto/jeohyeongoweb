@@ -166,7 +166,7 @@ def show_login_page():
         window.addEventListener('message', function(event) {
             if (event.origin === "https://jeohyeonweb.firebaseapp.com" && 
                 event.data.type === 'FIREBASE_ID_TOKEN') {
-                window.location.href = 'http://localhost:8501?token=' + encodeURIComponent(event.data.token);
+                window.location.href = 'https://jeohyeongoweb.streamlit.app/?token=' + encodeURIComponent(event.data.token);
             }
         });
         </script>
