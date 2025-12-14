@@ -405,10 +405,6 @@ def show_manager_features(token, user_info):
     stamps_data = user_info.get('stamps', {})
     stamp_count = sum(1 for has_stamp in stamps_data.values() if has_stamp)
     
-    if stamp_count >= 1:
-        st.warning(f"⚠️ 이미 {stamp_count}개의 스탬프를 보유하고 있습니다. 부장은 자신에게 하나의 스탬프만 부여할 수 있습니다.")
-        st.info("다른 학생에게 스탬프를 부여하려면 아래에서 진행해주세요.")
-    
     st.info("""
     **부장 권한 제한 사항:**
     1. 자신에게는 1개의 스탬프만 부여 가능
@@ -416,25 +412,58 @@ def show_manager_features(token, user_info):
     3. 순차적 스탬프 부여만 가능 (다음 순서 스탬프 자동 선택)
     """)
     
+    # 현재 스탬프 상태 표시
+    st.subheader("📊 현재 스탬프 상태")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("내 스탬프 수", f"{stamp_count}개")
+    with col2:
+        if stamp_count >= 1:
+            st.warning("⚠️ 이미 스탬프를 보유 중입니다.")
+        else:
+            st.success("✅ 스탬프 부여 가능")
+    
     with st.form("manager_grant_form"):
         st.subheader("🎫 순차적 스탬프 부여")
         
-        # 자신에게 부여할지 다른 학생에게 부여할지 선택
+        # 부여 대상 선택
         grant_type = st.radio("부여 대상 선택:", ["다른 학생에게 부여", "자신에게 부여"], key="manager_grant_type")
         
         if grant_type == "다른 학생에게 부여":
             target_input = st.text_input("대상 학생 학번 또는 이메일", 
                                         placeholder="2411224 (자동으로 @jeohyeon.hs.kr 추가)",
-                                        key="manager_grant_input_other")
-            target_email = format_email_input(target_input)
+                                        key="manager_grant_input_other",
+                                        disabled=(stamp_count >= 1))
+            
+            if target_input:
+                target_email = format_email_input(target_input)
+                st.info(f"**부여 대상:** {target_email}")
+                
+                # 대상 학생의 현재 스탬프 상태 확인
+                if st.button("대상 학생 정보 확인", key="check_target"):
+                    # 모든 사용자 정보 가져오기 (간단한 구현)
+                    response = make_flask_request('/api/users', 'GET', token=token)
+                    if response and response.status_code == 200:
+                        users = response.json().get('users', [])
+                        target_user = next((u for u in users if u.get('email') == target_email), None)
+                        if target_user:
+                            target_stamp_count = sum(1 for s in target_user.get('stamps', {}).values() if s)
+                            if target_stamp_count >= 1:
+                                st.error(f"❌ {target_email}은 이미 {target_stamp_count}개의 스탬프를 보유하고 있습니다.")
+                            else:
+                                st.success(f"✅ {target_email}은 스탬프 부여가 가능합니다.")
+                        else:
+                            st.info(f"ℹ️ {target_email} 사용자를 찾을 수 없습니다.")
         else:
             target_email = user_info['email']
             st.info(f"**부여 대상:** 자신 ({target_email})")
+            
+            if stamp_count >= 1:
+                st.error("❌ 이미 스탬프를 보유하고 있어 더 이상 부여할 수 없습니다.")
         
-        if target_email and grant_type == "다른 학생에게 부여":
-            st.info(f"**부여 대상:** {target_email}")
-        
-        submitted = st.form_submit_button("✅ 순차적 스탬프 부여", use_container_width=True)
+        submitted = st.form_submit_button("✅ 순차적 스탬프 부여", 
+                                         use_container_width=True,
+                                         disabled=(stamp_count >= 1 and grant_type == "자신에게 부여"))
         
         if submitted:
             if not target_email:
@@ -453,14 +482,14 @@ def show_manager_features(token, user_info):
                         st.balloons()
                         
                         # 자신의 정보 업데이트
-                        if target_email == user_info['email']:
-                            profile_response = make_flask_request('/api/profile', 'GET', token=token)
-                            if profile_response and profile_response.status_code == 200:
-                                st.session_state.user_info = profile_response.json().get('user')
+                        profile_response = make_flask_request('/api/profile', 'GET', token=token)
+                        if profile_response and profile_response.status_code == 200:
+                            st.session_state.user_info = profile_response.json().get('user')
+                            st.rerun()
                     else:
                         error_msg = response.json().get('message', '처리 실패') if response else '서버 연결 실패'
                         st.error(f"❌ 스탬프 부여 실패: {error_msg}")
-
+                        
 def show_admin_features(token, user_info):
     st.header("⚙️ 관리자 메뉴")
     
