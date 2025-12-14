@@ -102,7 +102,7 @@ def handle_login_callback(id_token):
         st.success("✅ 로그인 성공!")
         st.rerun()
     else:
-        error_msg = response.json().get('message', '로그인 실패') if response else '서버 연결 실패'
+        error_msg = response.json().get('message', '로그인 실패') if response else '위의 부장 권한 안내를 보세요(만약 오류가 아니면 하지후 정보공학연구소 차장 찾아가)'
         st.error(f"❌ 로그인 실패: {error_msg}")
 
 def show_schedule_section():
