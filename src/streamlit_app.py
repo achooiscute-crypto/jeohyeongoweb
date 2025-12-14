@@ -285,22 +285,7 @@ def show_login_page():
             html(login_js, height=100)
             st.info("로그인 페이지가 새 창에서 열립니다.")
         
-        with col2:
-            st.subheader("도움말")
-            st.markdown("""
-            - 학교 구글 계정만 로그인 가능합니다
-            - 로그인 후 자동으로 이동합니다
-            - 문제 발생 시 수동 로그인을 이용하세요
-            - 로그인 상태는 브라우저에 저장됩니다
-            """)
 
-        with st.expander("🛠️ 수동 로그인 (문제 발생 시)"):
-            manual_token = st.text_area("토큰을 여기에 붙여넣으세요", height=80)
-            if st.button("🔐 수동 로그인", use_container_width=True):
-                if manual_token.strip():
-                    handle_login_callback(manual_token.strip())
-                else:
-                    st.warning("토큰을 입력해주세요.")
 
         auth_js = f"""
         <script>
