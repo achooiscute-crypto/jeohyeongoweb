@@ -7,7 +7,6 @@ import datetime
 from functools import wraps
 import os
 import json
-from datetime import datetime, timezone
 
 # Flask 앱 생성
 app = Flask(__name__)
@@ -61,30 +60,6 @@ def get_next_stamp_number(stamps):
             return stamp_id, i
     return None, None  # 모든 스탬프가 이미 부여됨
 
-def count_stamps(stamps):
-    """부여된 스탬프 개수 세기"""
-    if not stamps:
-        return 0
-    return sum(1 for stamp in stamps.values() if stamp)
-
-def check_manager_stamp_limit(stamps, user_email, target_email, manager_email):
-    """매니저의 스탬프 제한 확인"""
-    if user_email == 'admin@jeohyeon.hs.kr':  # admin은 제한 없음
-        return True
-    
-    stamp_count = count_stamps(stamps)
-    
-    # 자신에게 스탬프 부여하는 경우
-    if target_email == manager_email:
-        if stamp_count >= 1:
-            return False, "부장은 자신에게 하나의 스탬프만 부여할 수 있습니다."
-        return True, ""
-    # 다른 학생에게 스탬프 부여하는 경우
-    else:
-        if stamp_count >= 1:
-            return False, "부장은 한 학생에게 하나의 스탬프만 부여할 수 있습니다."
-        return True, ""
-
 db = None
 if initialize_firebase():
     db = get_db()
@@ -94,7 +69,7 @@ def create_jwt(user_uid, email, role):
         'user_uid': user_uid,
         'email': email,
         'role': role,
-        'exp': datetime.now(timezone.utc) + datetime.timedelta(hours=24)
+        'exp': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)  # 수정
     }
     try:
         token = jwt.encode(payload, app.secret_key, algorithm='HS256')
@@ -177,7 +152,7 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'firebase_initialized': firebase_admin._apps != {},
-        'timestamp': datetime.now(timezone.utc).isoformat()
+        'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat()  # 수정
     })
 
 @app.route('/')
@@ -252,12 +227,11 @@ def get_profile(current_user):
 @token_required
 def update_stamps(current_user):
     user_role = current_user['role']
-    user_email = current_user['email']
     data = request.json
     target_email = data.get('target_email')
     booth_id = data.get('booth_id')
     action = data.get('action')
-    auto_grant = data.get('auto_grant', False)
+    auto_grant = data.get('auto_grant', False)  # 순차적 부여 모드
     
     if not target_email or not action:
         return jsonify({'message': 'target_email, action은 필수 입력값입니다.'}), 400
@@ -266,10 +240,9 @@ def update_stamps(current_user):
         if not db:
             return jsonify({'message': '데이터베이스 연결에 실패했습니다.'}), 500
             
-        # 대상 사용자 조회
         users_ref = db.collection('users')
-        target_query = users_ref.where('email', '==', target_email).limit(1)
-        target_docs = target_query.get()
+        query = users_ref.where('email', '==', target_email).limit(1)
+        target_docs = query.get()
         
         if not target_docs:
             return jsonify({'message': '대상 사용자를 찾을 수 없습니다.'}), 404
@@ -277,37 +250,25 @@ def update_stamps(current_user):
         target_doc = target_docs[0]
         target_data = target_doc.to_dict()
         
-        # 현재 스탬프 상태 가져오기
-        current_stamps = target_data.get('stamps', {})
-        if not current_stamps:
-            current_stamps = {booth: False for booth in STAMP_BOOTHS}
-        
-        existing_stamp_count = count_stamps(current_stamps)
+        new_stamps = target_data.get('stamps', {})
         
         if action == 'grant':
-            # ✅ 부장 권한 검사
+            # ✅ 부장은 순차적 부여만 가능
             if user_role == 'manager':
-                # 스탬프 제한 확인
-                allowed, message = check_manager_stamp_limit(current_stamps, user_email, target_email, user_email)
-                if not allowed:
-                    return jsonify({'message': message}), 400
-                
-                # 자동 부여 모드인지 확인
                 if not auto_grant:
                     return jsonify({'message': '부장은 순차적 스탬프 부여만 가능합니다.'}), 400
                 
-                # 다음 사용 가능한 스탬프 찾기
-                next_stamp, stamp_number = get_next_stamp_number(current_stamps)
+                next_stamp, stamp_number = get_next_stamp_number(new_stamps)
                 if not next_stamp:
                     return jsonify({'message': '모든 스탬프가 이미 부여되었습니다.'}), 400
                 
                 booth_id = next_stamp
                 action_text = "순차적 부여"
             
-            # ✅ 관리자는 제한 없음
+            # ✅ 관리자는 특정 스탬프 또는 순차적 부여 가능
             elif user_role == 'admin':
                 if auto_grant:
-                    next_stamp, stamp_number = get_next_stamp_number(current_stamps)
+                    next_stamp, stamp_number = get_next_stamp_number(new_stamps)
                     if not next_stamp:
                         return jsonify({'message': '모든 스탬프가 이미 부여되었습니다.'}), 400
                     booth_id = next_stamp
@@ -321,8 +282,7 @@ def update_stamps(current_user):
             else:
                 return jsonify({'message': '권한이 없습니다.'}), 403
             
-            # 스탬프 업데이트
-            current_stamps[booth_id] = True
+            new_stamps[booth_id] = True
             
         else:  # revoke
             if user_role not in ['admin']:
@@ -333,25 +293,19 @@ def update_stamps(current_user):
             if booth_id not in STAMP_BOOTHS:
                 return jsonify({'message': '유효하지 않은 부스 ID입니다.'}), 400
             
-            current_stamps[booth_id] = False
+            new_stamps[booth_id] = False
             action_text = "회수"
         
-        # 데이터베이스 업데이트
-        target_doc.reference.update({'stamps': current_stamps})
-        
-        # 업데이트된 스탬프 개수 계산
-        updated_count = count_stamps(current_stamps)
+        target_doc.reference.update({'stamps': new_stamps})
         
         return jsonify({
             'message': f'{target_email}에게 {booth_id} 스탬프를 {action_text}했습니다.',
-            'stamp_id': booth_id,
-            'current_stamp_count': updated_count,
-            'stamps': current_stamps
+            'stamp_id': booth_id
         }), 200
         
     except Exception as e:
         print(f"Stamps update error: {e}")
-        return jsonify({'message': f'스탬프 처리 중 오류 발생: {str(e)}'}), 500
+        return jsonify({'message': str(e)}), 500
 
 @app.route('/api/role', methods=['POST'])
 @token_required
