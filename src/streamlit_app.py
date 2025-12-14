@@ -234,7 +234,7 @@ def show_map_section():
     """)
 
 def show_login_page():
-    st.title("🏫 학교 웹사이트")
+    st.title(" 저현고 웹사이트")
     
     if 'just_logged_out' in st.session_state and st.session_state.just_logged_out:
         st.session_state.just_logged_out = False
@@ -278,8 +278,8 @@ def show_login_page():
             }}
             </script>
             <button onclick="openAuthPage()" 
-                    style="padding: 15px 30px; font-size: 16px; background: #FF4B4B; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
-                🚪 Google 로그인
+                    style="padding: 15px 30px; font-size: 16px; background: #87CEEB; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
+                 Google 로그인
             </button>
             """
             html(login_js, height=100)
