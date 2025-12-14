@@ -60,6 +60,10 @@ def get_next_stamp_number(stamps):
             return stamp_id, i
     return None, None  # 모든 스탬프가 이미 부여됨
 
+def count_stamps(stamps):
+    """부여된 스탬프 개수 세기"""
+    return sum(1 for stamp in stamps.values() if stamp)
+
 db = None
 if initialize_firebase():
     db = get_db()
@@ -69,7 +73,7 @@ def create_jwt(user_uid, email, role):
         'user_uid': user_uid,
         'email': email,
         'role': role,
-        'exp': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)  # 수정
+        'exp': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
     }
     try:
         token = jwt.encode(payload, app.secret_key, algorithm='HS256')
@@ -152,7 +156,7 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'firebase_initialized': firebase_admin._apps != {},
-        'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat()  # 수정
+        'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat()
     })
 
 @app.route('/')
@@ -227,11 +231,12 @@ def get_profile(current_user):
 @token_required
 def update_stamps(current_user):
     user_role = current_user['role']
+    user_email = current_user['email']
     data = request.json
     target_email = data.get('target_email')
     booth_id = data.get('booth_id')
     action = data.get('action')
-    auto_grant = data.get('auto_grant', False)  # 순차적 부여 모드
+    auto_grant = data.get('auto_grant', False)
     
     if not target_email or not action:
         return jsonify({'message': 'target_email, action은 필수 입력값입니다.'}), 400
@@ -251,10 +256,20 @@ def update_stamps(current_user):
         target_data = target_doc.to_dict()
         
         new_stamps = target_data.get('stamps', {})
+        existing_stamp_count = count_stamps(new_stamps)
         
         if action == 'grant':
-            # ✅ 부장은 순차적 부여만 가능
+            # ✅ 부장은 학생 당 하나의 스탬프만 부여 가능
             if user_role == 'manager':
+                # 자신에게도 스탬프 부여 가능
+                if target_email == user_email:
+                    if existing_stamp_count >= 1:
+                        return jsonify({'message': '부장은 자신에게 하나의 스탬프만 부여할 수 있습니다.'}), 400
+                else:
+                    # 다른 학생에게는 하나의 스탬프만 부여 가능
+                    if existing_stamp_count >= 1:
+                        return jsonify({'message': '부장은 한 학생에게 하나의 스탬프만 부여할 수 있습니다.'}), 400
+                
                 if not auto_grant:
                     return jsonify({'message': '부장은 순차적 스탬프 부여만 가능합니다.'}), 400
                 
@@ -265,7 +280,7 @@ def update_stamps(current_user):
                 booth_id = next_stamp
                 action_text = "순차적 부여"
             
-            # ✅ 관리자는 특정 스탬프 또는 순차적 부여 가능
+            # ✅ 관리자는 제한 없음
             elif user_role == 'admin':
                 if auto_grant:
                     next_stamp, stamp_number = get_next_stamp_number(new_stamps)
@@ -300,7 +315,8 @@ def update_stamps(current_user):
         
         return jsonify({
             'message': f'{target_email}에게 {booth_id} 스탬프를 {action_text}했습니다.',
-            'stamp_id': booth_id
+            'stamp_id': booth_id,
+            'current_stamp_count': count_stamps(new_stamps)
         }), 200
         
     except Exception as e:
