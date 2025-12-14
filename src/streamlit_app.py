@@ -594,13 +594,13 @@ def show_main_page():
     
     col1, col2 = st.columns([4, 1])
     with col1:
-        st.title(f"👋 {user_info['display_name']}님, 환영합니다!")
+        st.title(f" {user_info['display_name']}님, 환영합니다!")
         stamp_count = sum(1 for booth, has_stamp in user_info.get('stamps', {}).items() if has_stamp)
         total_booths = len(STAMP_BOOTHS)
         st.write(f"**역할:** {user_info['role']} | **스탬프:** {stamp_count}/{total_booths}")
         
     with col2:
-        if st.button("🚪 로그아웃", key="logout_button"):
+        if st.button(" 로그아웃", key="logout_button"):
             logout_js = """
             <script>
             localStorage.removeItem('stamp_auth');
