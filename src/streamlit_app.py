@@ -145,7 +145,7 @@ def show_clubs_section():
             st.write(f"**동아리 소개:** {club['소개']}")
 
 def show_login_page():
-    st.title("🏫 학교 웹사이트")
+    st.title(" ")
     
     if 'just_logged_out' in st.session_state and st.session_state.just_logged_out:
         st.session_state.just_logged_out = False
@@ -154,7 +154,7 @@ def show_login_page():
     if 'token' in st.query_params and not st.session_state.auth_token:
         if 'logout_triggered' not in st.session_state or not st.session_state.logout_triggered:
             id_token = st.query_params['token']
-            st.info("🔐 토큰을 받았습니다. 로그인 처리 중...")
+            st.info(" 토큰을 받았습니다. 로그인 처리 중...")
             
             response = make_flask_request('/api/login', 'POST', {'id_token': id_token})
             
@@ -171,7 +171,7 @@ def show_login_page():
             st.query_params.clear()
 
     if not st.session_state.auth_token:
-        st.success("학교 구글 계정(@jeohyeon.hs.kr)으로 로그인해 주세요.")
+        st.success(" ")
         
         col1, col2 = st.columns([1, 1])
         
@@ -185,27 +185,10 @@ def show_login_page():
             </script>
             <button onclick="openAuthPage()" 
                     style="padding: 15px 30px; font-size: 16px; background: #FF4B4B; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
-                🚪 Google 로그인
+                 Google 로그인
             </button>
             """
-            html(login_js, height=100)
-            st.info("로그인 페이지가 새 창에서 열립니다.")
-        
-        with col2:
-            st.subheader("도움말")
-            st.markdown("""
-            - 학교 구글 계정만 로그인 가능합니다
-            - 로그인 후 자동으로 이동합니다
-            - 문제 발생 시 수동 로그인을 이용하세요
-            """)
-
-        with st.expander("🛠️ 수동 로그인 (문제 발생 시)"):
-            manual_token = st.text_area("토큰을 여기에 붙여넣으세요", height=80)
-            if st.button("🔐 수동 로그인", use_container_width=True):
-                if manual_token.strip():
-                    handle_login_callback(manual_token.strip())
-                else:
-                    st.warning("토큰을 입력해주세요.")
+    
 
         auth_js = f"""
         <script>
