@@ -13,7 +13,8 @@ FLASK_SERVER_URL = "https://jeohyeon-academic-web.onrender.com"
 FIREBASE_AUTH_URL = "https://jeohyeonweb.firebaseapp.com"
 STREAMLIT_APP_URL = "https://jeohyeongoweb.streamlit.app"
 
-STAMP_BOOTHS = [f"booth{i}" for i in range(1, 35)]
+# ✅ 스탬프 ID 목록 (부스 → 스탬프로 변경)
+STAMP_IDS = [f"stamp{i}" for i in range(1, 35)]
 
 # 세션 상태 초기화
 session_defaults = {
@@ -63,13 +64,13 @@ def make_flask_request(endpoint, method='GET', data=None, token=None):
         return None
 
 def verify_token(token):
-    """토큰 검증 함수 (datetime.utcnow() 수정)"""
+    """토큰 검증 함수"""
     if not token:
         return None
     try:
         decoded = jwt.decode(token, options={"verify_signature": False})
         exp = decoded.get('exp', 0)
-        if datetime.now(timezone.utc).timestamp() > exp:  # 수정
+        if datetime.now(timezone.utc).timestamp() > exp:
             st.session_state.auth_token = None
             st.session_state.user_info = None
             st.error("로그인 세션이 만료되었습니다. 다시 로그인해주세요.")
@@ -222,7 +223,7 @@ def show_student_features(token, user_info):
     st.header("🎫 나의 스탬프 현황")
     
     stamps_per_page = 10
-    total_pages = (len(STAMP_BOOTHS) + stamps_per_page - 1) // stamps_per_page
+    total_pages = (len(STAMP_IDS) + stamps_per_page - 1) // stamps_per_page
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col1:
@@ -237,16 +238,16 @@ def show_student_features(token, user_info):
             st.rerun()
     
     start_idx = st.session_state.current_page * stamps_per_page
-    end_idx = min(start_idx + stamps_per_page, len(STAMP_BOOTHS))
-    current_stamps = STAMP_BOOTHS[start_idx:end_idx]
+    end_idx = min(start_idx + stamps_per_page, len(STAMP_IDS))
+    current_stamps = STAMP_IDS[start_idx:end_idx]
     
     stamps_data = user_info.get('stamps', {})
     
     cols = st.columns(5)
-    for i, booth in enumerate(current_stamps):
+    for i, stamp_id in enumerate(current_stamps):
         col_idx = i % 5
-        has_stamp = stamps_data.get(booth, False)
-        booth_number = booth.replace("booth", "")
+        has_stamp = stamps_data.get(stamp_id, False)
+        stamp_number = stamp_id.replace("stamp", "")
         
         with cols[col_idx]:
             if has_stamp:
@@ -260,12 +261,12 @@ def show_student_features(token, user_info):
                         box-shadow: 0 4px 8px rgba(0,0,0,0.2);
                         font-size: 16px;
                     '>
-                        {booth_number}
+                        {stamp_number}
                     </div>
                     """, 
                     unsafe_allow_html=True
                 )
-                st.success(f"**부스 {booth_number}**")
+                st.success(f"**스탬프 {stamp_number}**")
             else:
                 st.markdown(
                     f"""
@@ -275,15 +276,15 @@ def show_student_features(token, user_info):
                         display: flex; align-items: center; justify-content: center; 
                         color: #999; margin: 10px auto; font-size: 16px;
                     '>
-                        {booth_number}
+                        {stamp_number}
                     </div>
                     """, 
                     unsafe_allow_html=True
                 )
-                st.info(f"**부스 {booth_number}**")
+                st.info(f"**스탬프 {stamp_number}**")
     
     stamp_count = sum(1 for has_stamp in stamps_data.values() if has_stamp)
-    total_stamps = len(STAMP_BOOTHS)
+    total_stamps = len(STAMP_IDS)
     progress = stamp_count / total_stamps
     
     st.subheader("📊 진행 상황")
@@ -299,12 +300,18 @@ def show_student_features(token, user_info):
 def show_manager_features(token, user_info):
     st.header("🔄 스탬프 관리 (부장)")
     
-    st.info("⚠️ 부장은 순차적 스탬프 부여만 가능합니다. 각 학생에게는 순서대로 한 개의 스탬프만 부여할 수 있습니다.")
+    # ✅ 강화된 안내 메시지
+    st.warning("""
+    ⚠️ **부장 권한 안내**
+    - 부장은 **각 계정당 1개의 스탬프만** 부여할 수 있습니다
+    - 자신에게도 1개만 부여 가능합니다
+    - 한 번 부여하면 동일 계정에 추가 부여 불가
+    - 순차적으로 다음 빈 스탬프가 자동 부여됩니다
+    """)
     
     with st.form("manager_grant_form"):
         st.subheader("🎫 순차적 스탬프 부여")
         
-        # 학번만 입력해도 자동 완성
         target_input = st.text_input("대상 학생 학번 또는 이메일", 
                                     placeholder="2411224 (자동으로 @jeohyeon.hs.kr 추가)",
                                     key="manager_grant_input")
@@ -320,20 +327,20 @@ def show_manager_features(token, user_info):
                 st.error("❌ 대상 학번을 입력하세요.")
             else:
                 with st.spinner("순차적 스탬프 부여 중..."):
-                    # 순차적 부여 모드로 요청
                     response = make_flask_request('/api/stamps', 'POST', {
                         'target_email': target_email, 
                         'action': 'grant',
-                        'auto_grant': True  # 순차적 부여 모드
+                        'auto_grant': True
                     }, token)
                     
                     if response and response.status_code == 200:
                         data = response.json()
                         st.success(f"✅ {data.get('message')}")
                         st.balloons()
+                        st.info("💡 이 계정에는 더 이상 스탬프를 부여할 수 없습니다.")
                     else:
                         error_msg = response.json().get('message', '처리 실패') if response else '서버 연결 실패'
-                        st.error(f"❌ 스탬프 부여 실패: {error_msg}")
+                        st.error(f"❌ {error_msg}")
 
 def show_admin_features(token, user_info):
     st.header("⚙️ 관리자 메뉴")
@@ -354,7 +361,7 @@ def show_admin_features(token, user_info):
                 '이메일': user.get('email', '이메일 없음'),
                 '이름': user.get('display_name', '이름 없음'),
                 '역할': user.get('role', 'student'),
-                '스탬프': f"{stamp_count}/{len(STAMP_BOOTHS)}"
+                '스탬프': f"{stamp_count}/{len(STAMP_IDS)}"
             })
         
         st.dataframe(users_for_display, use_container_width=True)
@@ -384,7 +391,6 @@ def show_admin_features(token, user_info):
                         
                         if response and response.status_code == 200:
                             st.success(f"✅ {response.json().get('message')}")
-                            # 목록 새로고침
                             response = make_flask_request('/api/users', 'GET', token=token)
                             if response and response.status_code == 200:
                                 st.session_state.admin_users = response.json().get('users', [])
@@ -396,6 +402,7 @@ def show_admin_features(token, user_info):
                     st.error("❌ 대상 이메일을 입력하세요.")
     
     st.subheader("🎫 스탬프 관리")
+    st.info("💡 관리자는 Manager 제약 없이 모든 작업 가능")
     
     with st.expander("📝 순차적 스탬프 부여"):
         with st.form("admin_auto_grant_form"):
@@ -439,9 +446,9 @@ def show_admin_features(token, user_info):
                 action_type = st.radio("작업", ["부여", "회수"], key="admin_action", horizontal=True)
             
             with col2:
-                booth_id = st.selectbox("스탬프 선택", STAMP_BOOTHS, key="admin_booth_select")
-                booth_number = booth_id.replace("booth", "")
-                st.info(f"선택한 스탬프: **부스 {booth_number}**")
+                stamp_id = st.selectbox("스탬프 선택", STAMP_IDS, key="admin_stamp_select")
+                stamp_number = stamp_id.replace("stamp", "")
+                st.info(f"선택한 스탬프: **스탬프 {stamp_number}**")
             
             if st.form_submit_button("✅ 적용", use_container_width=True):
                 if not specific_target_email:
@@ -450,7 +457,7 @@ def show_admin_features(token, user_info):
                     with st.spinner("스탬프 처리 중..."):
                         response = make_flask_request('/api/stamps', 'POST', {
                             'target_email': specific_target_email, 
-                            'booth_id': booth_id,
+                            'stamp_id': stamp_id,
                             'action': 'grant' if action_type == "부여" else 'revoke'
                         }, token)
                         
@@ -469,9 +476,9 @@ def show_main_page():
     col1, col2 = st.columns([4, 1])
     with col1:
         st.title(f"👋 {user_info['display_name']}님, 환영합니다!")
-        stamp_count = sum(1 for booth, has_stamp in user_info.get('stamps', {}).items() if has_stamp)
-        total_booths = len(STAMP_BOOTHS)
-        st.write(f"**역할:** {user_info['role']} | **스탬프:** {stamp_count}/{total_booths}")
+        stamp_count = sum(1 for stamp, has_stamp in user_info.get('stamps', {}).items() if has_stamp)
+        total_stamps = len(STAMP_IDS)
+        st.write(f"**역할:** {user_info['role']} | **스탬프:** {stamp_count}/{total_stamps}")
         
     with col2:
         if st.button("🚪 로그아웃"):

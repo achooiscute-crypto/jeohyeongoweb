@@ -24,8 +24,8 @@ CORS(app, origins=allowed_origins)
 # ✅ 환경 변수 사용
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'fallback-secret-key-for-development')
 
-# ✅ 스탬프 부스 목록 34개로 확장 (기존 방식 유지)
-STAMP_BOOTHS = [f"booth{i}" for i in range(1, 35)]
+# ✅ 스탬프 ID 목록 (부스 → 스탬프로 변경)
+STAMP_IDS = [f"stamp{i}" for i in range(1, 35)]
 
 def initialize_firebase():
     try:
@@ -55,10 +55,55 @@ def get_db():
 def get_next_stamp_number(stamps):
     """순차적으로 다음 스탬프 번호 찾기"""
     for i in range(1, 35):
-        stamp_id = f"booth{i}"
+        stamp_id = f"stamp{i}"
         if not stamps.get(stamp_id, False):
             return stamp_id, i
     return None, None  # 모든 스탬프가 이미 부여됨
+
+def check_manager_grant_limit(db, manager_email, target_email):
+    """
+    Manager가 특정 target에게 이미 스탬프를 부여했는지 확인
+    
+    Returns:
+        tuple: (이미_부여됨: bool, 부여된_스탬프_id: str or None)
+    """
+    try:
+        grants_ref = db.collection('stamp_grants')
+        query = grants_ref.where('manager_email', '==', manager_email)\
+                          .where('target_email', '==', target_email)\
+                          .limit(1)
+        
+        existing_grants = query.get()
+        
+        if existing_grants:
+            # 이미 부여한 적이 있음
+            grant_data = existing_grants[0].to_dict()
+            return True, grant_data.get('stamp_id')
+        else:
+            # 부여한 적 없음
+            return False, None
+            
+    except Exception as e:
+        print(f"Grant limit check error: {e}")
+        return False, None
+
+def record_stamp_grant(db, manager_email, target_email, stamp_id):
+    """
+    스탬프 부여 내역을 stamp_grants 컬렉션에 기록
+    """
+    try:
+        grants_ref = db.collection('stamp_grants')
+        grant_data = {
+            'manager_email': manager_email,
+            'target_email': target_email,
+            'stamp_id': stamp_id,
+            'granted_at': firestore.SERVER_TIMESTAMP
+        }
+        grants_ref.add(grant_data)
+        return True
+    except Exception as e:
+        print(f"Grant record error: {e}")
+        return False
 
 db = None
 if initialize_firebase():
@@ -69,7 +114,7 @@ def create_jwt(user_uid, email, role):
         'user_uid': user_uid,
         'email': email,
         'role': role,
-        'exp': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)  # 수정
+        'exp': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
     }
     try:
         token = jwt.encode(payload, app.secret_key, algorithm='HS256')
@@ -101,7 +146,7 @@ def token_required(f):
 def init_or_get_user_profile(user_uid, email, name):
     if not db:
         default_role = 'admin' if email == '2411224@jeohyeon.hs.kr' else 'student'
-        default_stamps = {booth: False for booth in STAMP_BOOTHS}
+        default_stamps = {stamp: False for stamp in STAMP_IDS}
         return {
             'email': email, 
             'display_name': name, 
@@ -115,7 +160,7 @@ def init_or_get_user_profile(user_uid, email, name):
         if user_doc.exists:
             user_data = user_doc.to_dict()
             if 'stamps' not in user_data:
-                default_stamps = {booth: False for booth in STAMP_BOOTHS}
+                default_stamps = {stamp: False for stamp in STAMP_IDS}
                 user_data['stamps'] = default_stamps
                 user_ref.update({'stamps': default_stamps})
             return user_data
@@ -125,7 +170,7 @@ def init_or_get_user_profile(user_uid, email, name):
             else:
                 role = 'student'
             
-            default_stamps = {booth: False for booth in STAMP_BOOTHS}
+            default_stamps = {stamp: False for stamp in STAMP_IDS}
             
             new_user = {
                 'email': email,
@@ -139,7 +184,7 @@ def init_or_get_user_profile(user_uid, email, name):
     except Exception as e:
         print(f"User profile error: {e}")
         default_role = 'admin' if email == '2411224@jeohyeon.hs.kr' else 'student'
-        default_stamps = {booth: False for booth in STAMP_BOOTHS}
+        default_stamps = {stamp: False for stamp in STAMP_IDS}
         return {
             'email': email, 
             'display_name': name, 
@@ -152,7 +197,7 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'firebase_initialized': firebase_admin._apps != {},
-        'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat()  # 수정
+        'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat()
     })
 
 @app.route('/')
@@ -209,7 +254,7 @@ def get_profile(current_user):
                 user_data = user_doc.to_dict()
                 return jsonify({'user': user_data}), 200
         
-        default_stamps = {booth: False for booth in STAMP_BOOTHS}
+        default_stamps = {stamp: False for stamp in STAMP_IDS}
         return jsonify({
             'user': {
                 'email': current_user['email'],
@@ -222,16 +267,17 @@ def get_profile(current_user):
     except Exception as e:
         return jsonify({'message': str(e)}), 500
 
-# ✅ 수정된 스탬프 관리 API
+# ✅ 수정된 스탬프 관리 API (Manager 제약 추가)
 @app.route('/api/stamps', methods=['POST'])
 @token_required
 def update_stamps(current_user):
     user_role = current_user['role']
+    user_email = current_user['email']  # ✅ 부여하는 사람의 이메일
     data = request.json
     target_email = data.get('target_email')
-    booth_id = data.get('booth_id')
+    stamp_id = data.get('stamp_id')
     action = data.get('action')
-    auto_grant = data.get('auto_grant', False)  # 순차적 부여 모드
+    auto_grant = data.get('auto_grant', False)
     
     if not target_email or not action:
         return jsonify({'message': 'target_email, action은 필수 입력값입니다.'}), 400
@@ -253,54 +299,81 @@ def update_stamps(current_user):
         new_stamps = target_data.get('stamps', {})
         
         if action == 'grant':
-            # ✅ 부장은 순차적 부여만 가능
+            # ✅ 부장은 순차적 부여만 가능 + 1인당 1회 제한
             if user_role == 'manager':
                 if not auto_grant:
                     return jsonify({'message': '부장은 순차적 스탬프 부여만 가능합니다.'}), 400
+                
+                # ✅ 핵심: Manager가 이미 이 사람에게 스탬프를 부여했는지 확인
+                already_granted, previous_stamp = check_manager_grant_limit(db, user_email, target_email)
+                
+                if already_granted:
+                    return jsonify({
+                        'message': f'이미 {target_email}에게 {previous_stamp}를 부여했습니다. 각 계정에는 1개의 스탬프만 부여할 수 있습니다.'
+                    }), 400
                 
                 next_stamp, stamp_number = get_next_stamp_number(new_stamps)
                 if not next_stamp:
                     return jsonify({'message': '모든 스탬프가 이미 부여되었습니다.'}), 400
                 
-                booth_id = next_stamp
+                stamp_id = next_stamp
                 action_text = "순차적 부여"
             
-            # ✅ 관리자는 특정 스탬프 또는 순차적 부여 가능
+            # ✅ 관리자는 특정 스탬프 또는 순차적 부여 가능 (제한 없음)
             elif user_role == 'admin':
                 if auto_grant:
                     next_stamp, stamp_number = get_next_stamp_number(new_stamps)
                     if not next_stamp:
                         return jsonify({'message': '모든 스탬프가 이미 부여되었습니다.'}), 400
-                    booth_id = next_stamp
+                    stamp_id = next_stamp
                     action_text = "순차적 부여"
                 else:
-                    if not booth_id:
-                        return jsonify({'message': '부스 ID를 선택하세요.'}), 400
-                    if booth_id not in STAMP_BOOTHS:
-                        return jsonify({'message': '유효하지 않은 부스 ID입니다.'}), 400
+                    if not stamp_id:
+                        return jsonify({'message': '스탬프 ID를 선택하세요.'}), 400
+                    if stamp_id not in STAMP_IDS:
+                        return jsonify({'message': '유효하지 않은 스탬프 ID입니다.'}), 400
                     action_text = "특정 부여"
             else:
                 return jsonify({'message': '권한이 없습니다.'}), 403
             
-            new_stamps[booth_id] = True
+            # ✅ 스탬프 부여 처리
+            new_stamps[stamp_id] = True
+            target_doc.reference.update({'stamps': new_stamps})
+            
+            # ✅ Manager인 경우 부여 내역 기록 (Admin은 기록하지 않음)
+            if user_role == 'manager':
+                if not record_stamp_grant(db, user_email, target_email, stamp_id):
+                    print(f"Warning: Failed to record grant for {user_email} -> {target_email}")
             
         else:  # revoke
             if user_role not in ['admin']:
                 return jsonify({'message': '스탬프 회수는 관리자만 가능합니다.'}), 403
             
-            if not booth_id:
-                return jsonify({'message': '회수할 부스 ID를 선택하세요.'}), 400
-            if booth_id not in STAMP_BOOTHS:
-                return jsonify({'message': '유효하지 않은 부스 ID입니다.'}), 400
+            if not stamp_id:
+                return jsonify({'message': '회수할 스탬프 ID를 선택하세요.'}), 400
+            if stamp_id not in STAMP_IDS:
+                return jsonify({'message': '유효하지 않은 스탬프 ID입니다.'}), 400
             
-            new_stamps[booth_id] = False
+            new_stamps[stamp_id] = False
+            target_doc.reference.update({'stamps': new_stamps})
+            
+            # ✅ 회수 시 grant 기록도 삭제
+            try:
+                grants_ref = db.collection('stamp_grants')
+                query = grants_ref.where('target_email', '==', target_email)\
+                                 .where('stamp_id', '==', stamp_id)\
+                                 .limit(1)
+                grants_to_delete = query.get()
+                for grant in grants_to_delete:
+                    grant.reference.delete()
+            except Exception as e:
+                print(f"Grant deletion error: {e}")
+            
             action_text = "회수"
         
-        target_doc.reference.update({'stamps': new_stamps})
-        
         return jsonify({
-            'message': f'{target_email}에게 {booth_id} 스탬프를 {action_text}했습니다.',
-            'stamp_id': booth_id
+            'message': f'{target_email}에게 {stamp_id} 스탬프를 {action_text}했습니다.',
+            'stamp_id': stamp_id
         }), 200
         
     except Exception as e:
@@ -357,7 +430,7 @@ def get_all_users(current_user):
             user_data = doc.to_dict()
             user_data['id'] = doc.id
             if 'stamps' not in user_data:
-                user_data['stamps'] = {booth: False for booth in STAMP_BOOTHS}
+                user_data['stamps'] = {stamp: False for stamp in STAMP_IDS}
             users.append(user_data)
         
         return jsonify({'users': users}), 200
@@ -365,10 +438,10 @@ def get_all_users(current_user):
     except Exception as e:
         return jsonify({'message': str(e)}), 500
 
-@app.route('/api/booths', methods=['GET'])
+@app.route('/api/stamps', methods=['GET'])
 @token_required
-def get_booths(current_user):
-    return jsonify({'booths': STAMP_BOOTHS}), 200
+def get_stamps(current_user):
+    return jsonify({'stamps': STAMP_IDS}), 200
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
