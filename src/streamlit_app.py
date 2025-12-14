@@ -193,14 +193,6 @@ def show_login_page():
         
 
 
-        with st.expander("🛠️ 수동 로그인 (문제 발생 시)"):
-            manual_token = st.text_area("토큰을 여기에 붙여넣으세요", height=80)
-            if st.button("🔐 수동 로그인", use_container_width=True):
-                if manual_token.strip():
-                    handle_login_callback(manual_token.strip())
-                else:
-                    st.warning("토큰을 입력해주세요.")
-
         auth_js = f"""
         <script>
         window.addEventListener('message', function(event) {{
