@@ -427,7 +427,7 @@ def show_manager_features(token, user_info):
                         st.balloons()
                         st.info("💡 이 계정에는 더 이상 스탬프를 부여할 수 없습니다.")
                     else:
-                        error_msg = response.json().get('message', '처리 실패') if response else '서버 연결 실패'
+                        error_msg = response.json().get('message', '처리 실패') if response else '이 계정에는 더이상 스탬프를 부여할 수 없습니다.'
                         st.error(f"❌ {error_msg}")
 
 def show_admin_features(token, user_info):
