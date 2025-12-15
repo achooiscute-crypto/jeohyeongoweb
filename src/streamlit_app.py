@@ -534,23 +534,24 @@ def show_main_page():
     # ✅ 3개의 버튼으로 변경
     col_btn1, col_btn2, col_btn3 = st.columns(3)
     
-    with col_btn1:
-        if st.button("📚 학술발표\n참여 동아리", use_container_width=True, key="presentation_btn"):
-            st.session_state.show_presentation_clubs = not st.session_state.show_presentation_clubs
-            st.session_state.show_exhibition_activities = False
-            st.session_state.show_academic_web = False
     
-    with col_btn2:
+    with col_btn1:
         if st.button("🎨 전시 및\n체험 활동", use_container_width=True, key="exhibition_btn"):
             st.session_state.show_exhibition_activities = not st.session_state.show_exhibition_activities
             st.session_state.show_presentation_clubs = False
             st.session_state.show_academic_web = False
             
-    with col_btn3:
+    with col_btn2:
         if st.button("🌐 학술제 맵", use_container_width=True, key="academic_web_btn"):
             st.session_state.show_academic_web = not st.session_state.show_academic_web
             st.session_state.show_presentation_clubs = False
             st.session_state.show_exhibition_activities = False
+
+    with col_btn3:
+        if st.button("📚 학술발표\n참여 동아리", use_container_width=True, key="presentation_btn"):
+            st.session_state.show_presentation_clubs = not st.session_state.show_presentation_clubs
+            st.session_state.show_exhibition_activities = False
+            st.session_state.show_academic_web = False
     
     # ✅ 각 버튼에 대응하는 콘텐츠 표시
     if st.session_state.get('show_presentation_clubs', False):
