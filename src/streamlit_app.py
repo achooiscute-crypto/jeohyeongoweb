@@ -163,7 +163,7 @@ def show_top_banner(image_filename="src/banner.jpg", max_height=220, link=None):
       {link_start}
       <img src="data:image/*;base64,{b64}"
            style="
-             width:100%;
+             width:120%;
              max-height:{max_height}px;
              object-fit: cover;
              border-radius: 10px;
