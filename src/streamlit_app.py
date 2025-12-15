@@ -242,7 +242,7 @@ def show_login_page():
                             padding: 15px 30px;
                             font-size: 18px;
                             font-weight: bold;
-                            background: #718aee;
+                            background: #7e9af5;
                             color: white;
                             border: none;
                             border-radius: 25px;
