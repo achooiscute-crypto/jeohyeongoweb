@@ -598,8 +598,7 @@ def main():
     st.set_page_config(
         page_title="저현고 학술제", 
         page_icon="🏫", 
-        layout="wide",
-        initial_sidebar_state="expanded"  # 디버깅을 위해 사이드바 열기
+        layout="wide", # 디버깅을 위해 사이드바 열기
     )
     
     if 'auth_token' not in st.session_state:
