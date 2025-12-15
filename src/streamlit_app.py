@@ -217,7 +217,7 @@ def show_login_page():
         # ✅ 상단 여백
         st.markdown("<div style='height: 100px;'></div>", unsafe_allow_html=True)
         
-        # ✅ 중앙 정렬된 컨테이너
+        # ✅ 중앙 정렬된 컨테이너 삭제한다
         col1, col2, col3 = st.columns([1, 2, 1])
         
         with col2:
@@ -242,7 +242,7 @@ def show_login_page():
                             padding: 15px 30px;
                             font-size: 18px;
                             font-weight: bold;
-                            background: #87CEEB;
+                            background: #718aee;
                             color: white;
                             border: none;
                             border-radius: 25px;
