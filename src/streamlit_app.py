@@ -224,7 +224,7 @@ def show_login_page():
             st.markdown("""
             <div style='text-align: center; margin-bottom: 20px;'>
                 <h1 style='color: white; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);'>
-                    🏫 저현고 학술제
+                     저현고 학술제
                 </h1>
             </div>
             """, unsafe_allow_html=True)
@@ -255,7 +255,7 @@ def show_login_page():
                         "
                         onmouseover="this.style.background='#6CB4D9'; this.style.transform='translateY(-2px)'"
                         onmouseout="this.style.background='#87CEEB'; this.style.transform='translateY(0)'">
-                    🚪 Google 로그인
+                     Google 로그인
                 </button>
             </div>
             <script>
@@ -265,15 +265,6 @@ def show_login_page():
             </script>
             """
             html(login_button_html, height=80)
-
-        # 수동 로그인 옵션 (하단에 작게)
-        with st.expander("🛠️ 문제 발생 시 수동 로그인"):
-            manual_token = st.text_area("토큰을 여기에 붙여넣으세요", height=80)
-            if st.button("🔐 수동 로그인", use_container_width=True):
-                if manual_token.strip():
-                    handle_login_callback(manual_token.strip())
-                else:
-                    st.warning("토큰을 입력해주세요.")
 
         auth_js = f"""
         <script>
