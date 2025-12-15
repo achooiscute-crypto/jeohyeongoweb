@@ -713,7 +713,7 @@ def show_main_page():
         show_image_section("🎨 전시 및 체험 활동", "exhibition_activities")
         
     if st.session_state.get('show_academic_web', False):
-        show_image_section("🌐 학술제 웹", "academic_web")
+        show_image_section("🌐 학술제 맵", "academic_web")
     
     st.divider()
     
