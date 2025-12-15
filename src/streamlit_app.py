@@ -120,10 +120,21 @@ def handle_login_callback(id_token):
         st.error(f"❌ 로그인 실패: {error_msg}")
 
 def show_image_section(title, image_key):
-    """이미지 표시 섹션 (나중에 구현)"""
+    """이미지 표시 섹션"""
     st.subheader(title)
-    st.info("🖼️ 이미지가 곧 업데이트될 예정입니다.")
-    # 나중에 이미지 파일 표시 로직 추가
+    
+    # 이미지 파일 매핑
+    image_files = {
+        "presentation_clubs": "images/presentation_clubs.jpg",
+        "exhibition_activities": "images/exhibition_activities.jpg",
+        "academic_web": "images/academic_web.jpg"
+    }
+    
+    # 이미지 표시
+    try:
+        st.image(image_files[image_key], use_container_width=True)
+    except FileNotFoundError:
+        st.info("🖼️ 이미지가 곧 업데이트될 예정입니다.")
 
 def show_login_page():
     # ✅ 디버깅: 현재 작업 디렉토리 확인
