@@ -6,6 +6,7 @@ import os
 from dotenv import load_dotenv
 from streamlit.components.v1 import html
 import json
+import base64
 
 load_dotenv()
 
@@ -23,14 +24,23 @@ session_defaults = {
     'logout_triggered': False,
     'just_logged_out': False,
     'current_page': 0,
-    'show_schedule': False,
-    'show_clubs': False,
+    'show_presentation_clubs': False,
+    'show_exhibition_activities': False,
+    'show_academic_web': False,
     'admin_users': None
 }
 
 for key, default in session_defaults.items():
     if key not in st.session_state:
         st.session_state[key] = default
+
+def get_base64_image(image_path):
+    """이미지를 base64로 인코딩"""
+    try:
+        with open(image_path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode()
+    except FileNotFoundError:
+        return None
 
 def format_email_input(user_input):
     """학번만 입력해도 자동으로 이메일 완성"""
@@ -102,50 +112,71 @@ def handle_login_callback(id_token):
         st.success("✅ 로그인 성공!")
         st.rerun()
     else:
-        error_msg = response.json().get('message', '로그인 실패') if response else '위의 부장 권한 안내를 보세요(만약 오류가 아니면 하지후 정보공학연구소 차장 찾아가)'
+        error_msg = response.json().get('message', '로그인 실패') if response else '서버 연결 실패'
         st.error(f"❌ 로그인 실패: {error_msg}")
 
-def show_schedule_section():
-    st.subheader("📅 발표 일정")
-    schedule_data = [
-        {"시간": "09:00 - 09:30", "제목": "개회식", "장소": "강당"},
-        {"시간": "09:30 - 10:30", "제목": "1학년 과학 발표", "장소": "1층 로비"},
-        {"시간": "10:30 - 11:30", "제목": "2학년 역사 발표", "장소": "2층 세미나실"},
-        {"시간": "11:30 - 12:30", "제목": "점심 시간", "장소": "식당"},
-        {"시간": "12:30 - 14:00", "제목": "동아리 발표회", "장소": "각 동아리실"},
-        {"시간": "14:00 - 15:00", "제목": "특별 강연", "장소": "강당"},
-        {"시간": "15:00 - 16:00", "제목": "폐회식", "장소": "강당"},
-    ]
-    
-    for event in schedule_data:
-        with st.container():
-            col1, col2, col3 = st.columns([2, 3, 1])
-            with col1:
-                st.write(f"**{event['시간']}**")
-            with col2:
-                st.write(event['제목'])
-            with col3:
-                st.write(event['장소'])
-            st.markdown("---")
-
-def show_clubs_section():
-    st.subheader("🏫 동아리 목록")
-    clubs_data = [
-        {"이름": "과학 동아리", "지도교사": "김영희 선생님", "활동장소": "과학실 1", "소개": "실험과 연구를 통한 과학 탐구"},
-        {"이름": "역사 동아리", "지도교사": "이철수 선생님", "활동장소": "인문학실", "소개": "역사 탐방과 자료 연구"},
-        {"이름": "미술 동아리", "지도교사": "박지민 선생님", "활동장소": "미술실", "소개": "다양한 미술 활동과 전시"},
-        {"이름": "음악 동아리", "지도교사": "정다운 선생님", "활동장소": "음악실", "소개": "합주와 공연 준비"},
-        {"이름": "봉사 동아리", "지도교사": "최성민 선생님", "활동장소": "상담실", "소개": "지역사회 봉사 활동"},
-        {"이름": "코딩 동아리", "지도교사": "한지훈 선생님", "활동장소": "컴퓨터실", "소개": "프로그래밍과 앱 개발"},
-    ]
-    
-    for club in clubs_data:
-        with st.expander(f"**{club['이름']}** - {club['지도교사']}"):
-            st.write(f"**활동 장소:** {club['활동장소']}")
-            st.write(f"**동아리 소개:** {club['소개']}")
+def show_image_section(title, image_key):
+    """이미지 표시 섹션 (나중에 구현)"""
+    st.subheader(title)
+    st.info("🖼️ 이미지가 곧 업데이트될 예정입니다.")
+    # 나중에 이미지 파일 표시 로직 추가
 
 def show_login_page():
-    st.title("")
+    # ✅ 배경 이미지 설정을 위한 CSS
+    background_image_path = "background.jpg"  # 프로젝트 루트에 background.jpg 저장
+    
+    # base64 인코딩 시도
+    bg_image_base64 = get_base64_image(background_image_path)
+    
+    if bg_image_base64:
+        # 배경 이미지가 있을 때
+        page_bg_css = f"""
+        <style>
+        /* 전체 페이지 스타일 */
+        .stApp {{
+            background-image: linear-gradient(rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.3)), 
+                              url("data:image/jpg;base64,{bg_image_base64}");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }}
+        
+        /* 로그인 컨테이너 */
+        .login-container {{
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50%;
+            max-width: 300px;
+            z-index: 999;
+        }}
+        
+        /* 모바일 최적화 */
+        @media (max-width: 768px) {{
+            .login-container {{
+                width: 50%;
+                bottom: 60px;
+            }}
+        }}
+        
+        /* Streamlit 기본 요소 숨기기 */
+        #MainMenu {{visibility: hidden;}}
+        footer {{visibility: hidden;}}
+        header {{visibility: hidden;}}
+        </style>
+        """
+        st.markdown(page_bg_css, unsafe_allow_html=True)
+    else:
+        # 배경 이미지가 없을 때 기본 스타일
+        st.markdown("""
+        <style>
+        .stApp {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        </style>
+        """, unsafe_allow_html=True)
     
     if 'just_logged_out' in st.session_state and st.session_state.just_logged_out:
         st.session_state.just_logged_out = False
@@ -154,7 +185,7 @@ def show_login_page():
     if 'token' in st.query_params and not st.session_state.auth_token:
         if 'logout_triggered' not in st.session_state or not st.session_state.logout_triggered:
             id_token = st.query_params['token']
-            st.info(" 토큰을 받았습니다. 로그인 처리 중...")
+            st.info("🔐 토큰을 받았습니다. 로그인 처리 중...")
             
             response = make_flask_request('/api/login', 'POST', {'id_token': id_token})
             
@@ -171,27 +202,66 @@ def show_login_page():
             st.query_params.clear()
 
     if not st.session_state.auth_token:
-        st.success("학교 구글 계정(@jeohyeon.hs.kr)으로 로그인해 주세요.")
+        # ✅ 상단 여백
+        st.markdown("<div style='height: 100px;'></div>", unsafe_allow_html=True)
         
-        col1, col2 = st.columns([1, 1])
+        # ✅ 중앙 정렬된 컨테이너
+        col1, col2, col3 = st.columns([1, 2, 1])
         
-        with col1:
-            st.subheader("로그인")
-            login_js = f"""
+        with col2:
+            st.markdown("""
+            <div style='text-align: center; margin-bottom: 20px;'>
+                <h1 style='color: white; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);'>
+                    🏫 저현고 학술제
+                </h1>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # ✅ 하단 로그인 버튼
+        st.markdown("<div style='height: 200px;'></div>", unsafe_allow_html=True)
+        
+        # 버튼을 중앙 정렬하기 위한 컬럼
+        col_left, col_center, col_right = st.columns([1, 1, 1])
+        
+        with col_center:
+            # ✅ 하늘색 로그인 버튼 스타일
+            login_button_html = f"""
+            <div style='text-align: center;'>
+                <button onclick="openAuthPage()" 
+                        style="
+                            padding: 15px 30px;
+                            font-size: 18px;
+                            font-weight: bold;
+                            background: #87CEEB;
+                            color: white;
+                            border: none;
+                            border-radius: 25px;
+                            cursor: pointer;
+                            width: 100%;
+                            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+                            transition: all 0.3s;
+                        "
+                        onmouseover="this.style.background='#6CB4D9'; this.style.transform='translateY(-2px)'"
+                        onmouseout="this.style.background='#87CEEB'; this.style.transform='translateY(0)'">
+                    🚪 Google 로그인
+                </button>
+            </div>
             <script>
             function openAuthPage() {{
                 window.open("{FIREBASE_AUTH_URL}", "_blank");
             }}
             </script>
-            <button onclick="openAuthPage()" 
-                    style="padding: 15px 30px; font-size: 16px; background: #FF4B4B; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
-                🚪 Google 로그인
-            </button>
             """
-            html(login_js, height=100)
-            st.info("로그인 페이지가 새 창에서 열립니다.")
-        
+            html(login_button_html, height=80)
 
+        # 수동 로그인 옵션 (하단에 작게)
+        with st.expander("🛠️ 문제 발생 시 수동 로그인"):
+            manual_token = st.text_area("토큰을 여기에 붙여넣으세요", height=80)
+            if st.button("🔐 수동 로그인", use_container_width=True):
+                if manual_token.strip():
+                    handle_login_callback(manual_token.strip())
+                else:
+                    st.warning("토큰을 입력해주세요.")
 
         auth_js = f"""
         <script>
@@ -480,23 +550,37 @@ def show_main_page():
             st.rerun()
     
     st.markdown("---")
-    col_btn1, col_btn2 = st.columns(2)
+    
+    # ✅ 3개의 버튼으로 변경
+    col_btn1, col_btn2, col_btn3 = st.columns(3)
     
     with col_btn1:
-        if st.button("📅 발표 일정 보기", use_container_width=True, key="schedule_btn"):
-            st.session_state.show_schedule = not st.session_state.show_schedule
-            st.session_state.show_clubs = False if st.session_state.show_schedule else st.session_state.show_clubs
+        if st.button("📚 학술발표\n참여 동아리", use_container_width=True, key="presentation_btn"):
+            st.session_state.show_presentation_clubs = not st.session_state.show_presentation_clubs
+            st.session_state.show_exhibition_activities = False
+            st.session_state.show_academic_web = False
     
     with col_btn2:
-        if st.button("🏫 동아리 목록", use_container_width=True, key="clubs_btn"):
-            st.session_state.show_clubs = not st.session_state.show_clubs
-            st.session_state.show_schedule = False if st.session_state.show_clubs else st.session_state.show_schedule
+        if st.button("🎨 전시 및\n체험 활동", use_container_width=True, key="exhibition_btn"):
+            st.session_state.show_exhibition_activities = not st.session_state.show_exhibition_activities
+            st.session_state.show_presentation_clubs = False
+            st.session_state.show_academic_web = False
+            
+    with col_btn3:
+        if st.button("🌐 학술제 웹", use_container_width=True, key="academic_web_btn"):
+            st.session_state.show_academic_web = not st.session_state.show_academic_web
+            st.session_state.show_presentation_clubs = False
+            st.session_state.show_exhibition_activities = False
     
-    if st.session_state.get('show_schedule', False):
-        show_schedule_section()
+    # ✅ 각 버튼에 대응하는 콘텐츠 표시
+    if st.session_state.get('show_presentation_clubs', False):
+        show_image_section("📚 학술발표 참여 동아리", "presentation_clubs")
         
-    if st.session_state.get('show_clubs', False):
-        show_clubs_section()
+    if st.session_state.get('show_exhibition_activities', False):
+        show_image_section("🎨 전시 및 체험 활동", "exhibition_activities")
+        
+    if st.session_state.get('show_academic_web', False):
+        show_image_section("🌐 학술제 웹", "academic_web")
     
     st.divider()
     
@@ -511,7 +595,7 @@ def show_main_page():
 
 def main():
     st.set_page_config(
-        page_title="학교 웹사이트", 
+        page_title="저현고 학술제", 
         page_icon="🏫", 
         layout="wide",
         initial_sidebar_state="collapsed"
