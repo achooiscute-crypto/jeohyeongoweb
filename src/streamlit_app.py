@@ -139,7 +139,7 @@ def show_image_section(title, image_key):
 # --- 아래 유틸 함수들 아래 어딘가에 추가 ---
 def show_top_banner(image_filename="src/banner.jpg", max_height=220, link=None):
     """
-    최상단 배너 표시 (현재 파일과 같은 디렉토리의 이미지 사용).
+    최상단 배너 표시 (모바일 최적화)
     - image_filename: 파일명 (예: "banner.jpg")
     - max_height: 배너 최대 높이(px)
     - link: 배너 클릭 시 열릴 외부 링크 (없으면 단순 이미지)
@@ -147,28 +147,50 @@ def show_top_banner(image_filename="src/banner.jpg", max_height=220, link=None):
     current_dir = os.path.dirname(os.path.abspath(__file__))
     image_path = os.path.join(current_dir, image_filename)
 
-    # 파일이 존재하면 base64로 읽어서 HTML로 렌더 (더 깔끔한 스타일 제어 가능)
     b64 = get_base64_image(image_path)
     if not b64:
-        # fallback: st.image (또는 에러 표시)
         st.warning(f"배너 이미지가 없습니다: {image_filename}")
         return
 
-    # 스타일: 가로 전체, 최대 높이 고정, object-fit: cover 로 깔끔하게
-    link_start = f'<a href="{link}" target="_blank">' if link else ''
+    # 모바일에서 전체 너비를 차지하도록 수정
+    link_start = f'<a href="{link}" target="_blank" style="display:block; width:100%;">' if link else ''
     link_end = '</a>' if link else ''
 
     banner_html = f"""
-    <div style="width:100%; display:flex; justify-content:center; margin-bottom:18px;">
+    <style>
+    /* 배너 컨테이너 스타일 */
+    .banner-container {{
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        margin-bottom: 18px;
+    }}
+    
+    /* 배너 이미지 스타일 */
+    .banner-image {{
+        width: 100%;
+        max-height: {max_height}px;
+        object-fit: cover;
+        border-radius: 10px;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+        display: block;
+    }}
+    
+    /* 모바일 최적화 */
+    @media (max-width: 768px) {{
+        .banner-image {{
+            border-radius: 0;  /* 모바일에서 모서리 둥글기 제거 */
+            max-height: 180px;  /* 모바일에서 높이 조정 */
+        }}
+        .banner-container {{
+            margin-bottom: 12px;
+        }}
+    }}
+    </style>
+    <div class="banner-container">
       {link_start}
       <img src="data:image/*;base64,{b64}"
-           style="
-             width:120%;
-             max-height:{max_height}px;
-             object-fit: cover;
-             border-radius: 10px;
-             box-shadow: 0 6px 18px rgba(0,0,0,0.12);
-           "
+           class="banner-image"
            alt="{image_filename}"
       />
       {link_end}
