@@ -15,7 +15,7 @@ FIREBASE_AUTH_URL = "https://jeohyeonweb.firebaseapp.com"
 STREAMLIT_APP_URL = "https://jeohyeongoweb.streamlit.app"
 
 # ✅ 스탬프 ID 목록 (부스 → 스탬프로 변경)
-STAMP_IDS = [f"stamp{i}" for i in range(1, 35)]
+STAMP_IDS = [f"stamp{i}" for i in range(1, 34)]
 
 # 세션 상태 초기화
 session_defaults = {
