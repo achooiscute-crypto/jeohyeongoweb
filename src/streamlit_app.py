@@ -125,9 +125,9 @@ def show_image_section(title, image_key):
     
     # 이미지 파일 매핑
     image_files = {
-        "presentation_clubs": "images/presentation_clubs.jpg",
-        "exhibition_activities": "images/exhibition_activities.jpg",
-        "academic_web": "images/academic_web.jpg"
+        "presentation_clubs": "src/images/presentation_clubs.jpg",
+        "exhibition_activities": "src/images/exhibition_activities.jpg",
+        "academic_web": "src/images/academic_web.jpg"
     }
     
     # 이미지 표시
@@ -135,6 +135,47 @@ def show_image_section(title, image_key):
         st.image(image_files[image_key], use_container_width=True)
     except FileNotFoundError:
         st.info("🖼️ 이미지가 곧 업데이트될 예정입니다.")
+
+# --- 아래 유틸 함수들 아래 어딘가에 추가 ---
+def show_top_banner(image_filename="banner.jpg", max_height=220, link=None):
+    """
+    최상단 배너 표시 (현재 파일과 같은 디렉토리의 이미지 사용).
+    - image_filename: 파일명 (예: "banner.jpg")
+    - max_height: 배너 최대 높이(px)
+    - link: 배너 클릭 시 열릴 외부 링크 (없으면 단순 이미지)
+    """
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    image_path = os.path.join(current_dir, image_filename)
+
+    # 파일이 존재하면 base64로 읽어서 HTML로 렌더 (더 깔끔한 스타일 제어 가능)
+    b64 = get_base64_image(image_path)
+    if not b64:
+        # fallback: st.image (또는 에러 표시)
+        st.warning(f"배너 이미지가 없습니다: {image_filename}")
+        return
+
+    # 스타일: 가로 전체, 최대 높이 고정, object-fit: cover 로 깔끔하게
+    link_start = f'<a href="{link}" target="_blank">' if link else ''
+    link_end = '</a>' if link else ''
+
+    banner_html = f"""
+    <div style="width:100%; display:flex; justify-content:center; margin-bottom:18px;">
+      {link_start}
+      <img src="data:image/*;base64,{b64}"
+           style="
+             width:100%;
+             max-height:{max_height}px;
+             object-fit: cover;
+             border-radius: 10px;
+             box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+           "
+           alt="{image_filename}"
+      />
+      {link_end}
+    </div>
+    """
+    st.markdown(banner_html, unsafe_allow_html=True)
+
 
 def show_login_page():
     # ✅ 디버깅: 현재 작업 디렉토리 확인
@@ -519,6 +560,10 @@ def show_admin_features(token, user_info):
 def show_main_page():
     token = st.session_state.auth_token
     user_info = st.session_state.user_info
+
+    # 최상단 배너 표시 (타이틀보다 위에 두고 싶으면 이 줄을 맨 처음에 호출)
+    show_top_banner("banner.jpg", max_height=180, link=None)
+
     
     col1, col2 = st.columns([4, 1])
     with col1:
