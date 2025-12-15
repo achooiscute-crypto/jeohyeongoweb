@@ -40,6 +40,10 @@ def get_base64_image(image_path):
         with open(image_path, "rb") as img_file:
             return base64.b64encode(img_file.read()).decode()
     except FileNotFoundError:
+        print(f"❌ 파일을 찾을 수 없음: {image_path}")
+        return None
+    except Exception as e:
+        print(f"❌ 이미지 로드 오류: {e}")
         return None
 
 def format_email_input(user_input):
@@ -122,13 +126,36 @@ def show_image_section(title, image_key):
     # 나중에 이미지 파일 표시 로직 추가
 
 def show_login_page():
-    # ✅ 배경 이미지 설정을 위한 CSS
-    background_image_path = "background.jpg"  # 프로젝트 루트에 background.jpg 저장
+    # ✅ 디버깅: 현재 작업 디렉토리 확인
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    background_image_path = os.path.join(current_dir, "background.jpg")
+    
+    # ✅ 디버깅 정보 출력 (임시)
+    with st.sidebar:
+        st.write("🔍 디버깅 정보")
+        st.write(f"작업 디렉토리: `{os.getcwd()}`")
+        st.write(f"스크립트 위치: `{current_dir}`")
+        st.write(f"이미지 경로: `{background_image_path}`")
+        st.write(f"파일 존재: `{os.path.exists(background_image_path)}`")
+        
+        if os.path.exists(background_image_path):
+            file_size = os.path.getsize(background_image_path)
+            st.write(f"파일 크기: `{file_size:,} bytes`")
+        
+        # 디렉토리 내 파일 목록
+        st.write("현재 디렉토리 파일:")
+        try:
+            files = os.listdir(current_dir)
+            for f in files[:10]:  # 처음 10개만
+                st.write(f"- `{f}`")
+        except Exception as e:
+            st.write(f"오류: {e}")
     
     # base64 인코딩 시도
     bg_image_base64 = get_base64_image(background_image_path)
     
     if bg_image_base64:
+        st.sidebar.success("✅ 배경 이미지 로드 성공!")
         # 배경 이미지가 있을 때
         page_bg_css = f"""
         <style>
@@ -142,25 +169,6 @@ def show_login_page():
             background-attachment: fixed;
         }}
         
-        /* 로그인 컨테이너 */
-        .login-container {{
-            position: fixed;
-            bottom: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 50%;
-            max-width: 300px;
-            z-index: 999;
-        }}
-        
-        /* 모바일 최적화 */
-        @media (max-width: 768px) {{
-            .login-container {{
-                width: 50%;
-                bottom: 60px;
-            }}
-        }}
-        
         /* Streamlit 기본 요소 숨기기 */
         #MainMenu {{visibility: hidden;}}
         footer {{visibility: hidden;}}
@@ -169,12 +177,16 @@ def show_login_page():
         """
         st.markdown(page_bg_css, unsafe_allow_html=True)
     else:
+        st.sidebar.error("❌ 배경 이미지 로드 실패 - 기본 배경 사용")
         # 배경 이미지가 없을 때 기본 스타일
         st.markdown("""
         <style>
         .stApp {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
         </style>
         """, unsafe_allow_html=True)
     
@@ -598,7 +610,7 @@ def main():
         page_title="저현고 학술제", 
         page_icon="🏫", 
         layout="wide",
-        initial_sidebar_state="collapsed"
+        initial_sidebar_state="expanded"  # 디버깅을 위해 사이드바 열기
     )
     
     if 'auth_token' not in st.session_state:
