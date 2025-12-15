@@ -137,7 +137,7 @@ def show_image_section(title, image_key):
         st.info("🖼️ 이미지가 곧 업데이트될 예정입니다.")
 
 # --- 아래 유틸 함수들 아래 어딘가에 추가 ---
-def show_top_banner(image_filename="banner.jpg", max_height=220, link=None):
+def show_top_banner(image_filename="src/banner.jpg", max_height=220, link=None):
     """
     최상단 배너 표시 (현재 파일과 같은 디렉토리의 이미지 사용).
     - image_filename: 파일명 (예: "banner.jpg")
