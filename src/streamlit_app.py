@@ -130,27 +130,6 @@ def show_login_page():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     background_image_path = os.path.join(current_dir, "background.jpg")
     
-    # ✅ 디버깅 정보 출력 (임시)
-    with st.sidebar:
-        st.write("🔍 디버깅 정보")
-        st.write(f"작업 디렉토리: `{os.getcwd()}`")
-        st.write(f"스크립트 위치: `{current_dir}`")
-        st.write(f"이미지 경로: `{background_image_path}`")
-        st.write(f"파일 존재: `{os.path.exists(background_image_path)}`")
-        
-        if os.path.exists(background_image_path):
-            file_size = os.path.getsize(background_image_path)
-            st.write(f"파일 크기: `{file_size:,} bytes`")
-        
-        # 디렉토리 내 파일 목록
-        st.write("현재 디렉토리 파일:")
-        try:
-            files = os.listdir(current_dir)
-            for f in files[:10]:  # 처음 10개만
-                st.write(f"- `{f}`")
-        except Exception as e:
-            st.write(f"오류: {e}")
-    
     # base64 인코딩 시도
     bg_image_base64 = get_base64_image(background_image_path)
     
@@ -568,7 +547,7 @@ def show_main_page():
             st.session_state.show_academic_web = False
             
     with col_btn3:
-        if st.button("🌐 학술제 웹", use_container_width=True, key="academic_web_btn"):
+        if st.button("🌐 학술제 맵", use_container_width=True, key="academic_web_btn"):
             st.session_state.show_academic_web = not st.session_state.show_academic_web
             st.session_state.show_presentation_clubs = False
             st.session_state.show_exhibition_activities = False
