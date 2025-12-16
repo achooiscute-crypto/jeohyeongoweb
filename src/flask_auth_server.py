@@ -443,6 +443,50 @@ def get_all_users(current_user):
 def get_stamps(current_user):
     return jsonify({'stamps': STAMP_IDS}), 200
 
+@app.route('/api/reset-all-stamps', methods=['POST'])
+@token_required
+def reset_all_stamps(current_user):
+    """
+    모든 사용자의 스탬프 기록과 stamp_grants 컬렉션 초기화
+    admin만 접근 가능
+    """
+    if current_user['role'] != 'admin':
+        return jsonify({'message': '관리자만 접근 가능합니다.'}), 403
+    
+    try:
+        if not db:
+            return jsonify({'message': '데이터베이스 연결에 실패했습니다.'}), 500
+        
+        # 1. 모든 사용자의 stamps 필드 초기화
+        users_ref = db.collection('users')
+        users = users_ref.stream()
+        
+        user_count = 0
+        default_stamps = {stamp: False for stamp in STAMP_IDS}
+        
+        for user_doc in users:
+            user_doc.reference.update({'stamps': default_stamps})
+            user_count += 1
+        
+        # 2. stamp_grants 컬렉션의 모든 문서 삭제
+        grants_ref = db.collection('stamp_grants')
+        grants = grants_ref.stream()
+        
+        grant_count = 0
+        for grant_doc in grants:
+            grant_doc.reference.delete()
+            grant_count += 1
+        
+        return jsonify({
+            'message': f'모든 스탬프 기록이 초기화되었습니다. (사용자: {user_count}명, 부여기록: {grant_count}건)',
+            'users_reset': user_count,
+            'grants_deleted': grant_count
+        }), 200
+        
+    except Exception as e:
+        print(f"Reset all stamps error: {e}")
+        return jsonify({'message': f'초기화 중 오류 발생: {str(e)}'}), 500
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     print(f"Starting Flask Auth Server on port {port}...")
