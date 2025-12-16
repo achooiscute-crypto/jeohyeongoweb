@@ -367,45 +367,55 @@ def show_student_features(token, user_info):
     
     stamps_data = user_info.get('stamps', {})
     
-    cols = st.columns(5)
-    for i, stamp_id in enumerate(current_stamps):
-        col_idx = i % 5
+    # ✅ 세로 레이아웃: 각 스탬프를 한 줄에 하나씩 표시
+    for stamp_id in current_stamps:
         has_stamp = stamps_data.get(stamp_id, False)
         stamp_number = stamp_id.replace("stamp", "")
         
-        with cols[col_idx]:
-            if has_stamp:
-                st.markdown(
-                    f"""
-                    <div style='
-                        width: 80px; height: 80px; border-radius: 50%; 
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        display: flex; align-items: center; justify-content: center; 
-                        color: white; font-weight: bold; margin: 10px auto;
-                        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-                        font-size: 16px;
-                    '>
-                        {stamp_number}
-                    </div>
-                    """, 
-                    unsafe_allow_html=True
-                )
-                st.success(f"**스탬프 {stamp_number}**")
-            else:
-                st.markdown(
-                    f"""
-                    <div style='
-                        width: 80px; height: 80px; border-radius: 50%; 
-                        background: #f0f0f0; border: 2px dashed #ccc;
-                        display: flex; align-items: center; justify-content: center; 
-                        color: #999; margin: 10px auto; font-size: 16px;
-                    '>
-                        {stamp_number}
-                    </div>
-                    """, 
-                    unsafe_allow_html=True
-                )
-                st.info(f"**스탬프 {stamp_number}**")
+        # 각 스탬프를 전체 너비로 표시
+        if has_stamp:
+            st.markdown(
+                f"""
+                <div style='
+                    width: 100%; 
+                    height: 80px; 
+                    border-radius: 15px; 
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    display: flex; 
+                    align-items: center; 
+                    justify-content: center; 
+                    color: white; 
+                    font-weight: bold; 
+                    margin: 10px 0;
+                    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+                    font-size: 24px;
+                '>
+                    ✅ 스탬프 {stamp_number}
+                </div>
+                """, 
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown(
+                f"""
+                <div style='
+                    width: 100%; 
+                    height: 80px; 
+                    border-radius: 15px; 
+                    background: #f0f0f0; 
+                    border: 2px dashed #ccc;
+                    display: flex; 
+                    align-items: center; 
+                    justify-content: center; 
+                    color: #999; 
+                    margin: 10px 0; 
+                    font-size: 24px;
+                '>
+                    ⭕ 스탬프 {stamp_number}
+                </div>
+                """, 
+                unsafe_allow_html=True
+            )
     
     stamp_count = sum(1 for has_stamp in stamps_data.values() if has_stamp)
     total_stamps = len(STAMP_IDS)
