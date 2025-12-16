@@ -15,7 +15,7 @@ FIREBASE_AUTH_URL = "https://jeohyeonweb.firebaseapp.com"
 STREAMLIT_APP_URL = "https://jeohyeongoweb.streamlit.app"
 
 # ✅ 스탬프 ID 목록 (부스 → 스탬프로 변경)
-STAMP_IDS = [f"stamp{i}" for i in range(1, 35)]
+STAMP_IDS = [f"stamp{i}" for i in range(1, 34)]
 
 # 세션 상태 초기화
 session_defaults = {
@@ -40,8 +40,10 @@ def get_base64_image(image_path):
         with open(image_path, "rb") as img_file:
             return base64.b64encode(img_file.read()).decode()
     except FileNotFoundError:
+        print(f"❌ 파일을 찾을 수 없음: {image_path}")
         return None
-    except Exception:
+    except Exception as e:
+        print(f"❌ 이미지 로드 오류: {e}")
         return None
 
 def format_email_input(user_input):
@@ -118,20 +120,95 @@ def handle_login_callback(id_token):
         st.error(f"❌ 로그인 실패: {error_msg}")
 
 def show_image_section(title, image_key):
-    """이미지 표시 섹션 (나중에 구현)"""
+    """이미지 표시 섹션"""
     st.subheader(title)
-    st.info("🖼️ 이미지가 곧 업데이트될 예정입니다.")
-    # 나중에 이미지 파일 표시 로직 추가
+    
+    # 이미지 파일 매핑
+    image_files = {
+        "presentation_clubs": "src/images/presentation_clubs.jpg",
+        "exhibition_activities": "src/images/exhibition_activities.jpg",
+        "academic_web": "src/images/academic_web.jpg"
+    }
+    
+    # 이미지 표시
+    try:
+        st.image(image_files[image_key], use_container_width=True)
+    except FileNotFoundError:
+        st.info("🖼️ 이미지가 곧 업데이트될 예정입니다.")
+
+# --- 아래 유틸 함수들 아래 어딘가에 추가 ---
+def show_top_banner(image_filename="src/banner.jpg", max_height=220, link=None):
+    """
+    최상단 배너 표시 (모바일 최적화)
+    - image_filename: 파일명 (예: "banner.jpg")
+    - max_height: 배너 최대 높이(px)
+    - link: 배너 클릭 시 열릴 외부 링크 (없으면 단순 이미지)
+    """
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    image_path = os.path.join(current_dir, image_filename)
+
+    b64 = get_base64_image(image_path)
+    if not b64:
+        st.warning(f"배너 이미지가 없습니다: {image_filename}")
+        return
+
+    # 모바일에서 전체 너비를 차지하도록 수정
+    link_start = f'<a href="{link}" target="_blank" style="display:block; width:100%;">' if link else ''
+    link_end = '</a>' if link else ''
+
+    banner_html = f"""
+    <style>
+    /* 배너 컨테이너 스타일 */
+    .banner-container {{
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        margin-bottom: 18px;
+    }}
+    
+    /* 배너 이미지 스타일 */
+    .banner-image {{
+        width: 100%;
+        max-height: {max_height}px;
+        object-fit: cover;
+        border-radius: 10px;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+        display: block;
+    }}
+    
+    /* 모바일 최적화 */
+    @media (max-width: 768px) {{
+        .banner-image {{
+            border-radius: 0;  /* 모바일에서 모서리 둥글기 제거 */
+            max-height: 180px;  /* 모바일에서 높이 조정 */
+        }}
+        .banner-container {{
+            margin-bottom: 12px;
+        }}
+    }}
+    </style>
+    <div class="banner-container">
+      {link_start}
+      <img src="data:image/*;base64,{b64}"
+           class="banner-image"
+           alt="{image_filename}"
+      />
+      {link_end}
+    </div>
+    """
+    st.markdown(banner_html, unsafe_allow_html=True)
+
 
 def show_login_page():
-    # ✅ 배경 이미지 설정
+    # ✅ 디버깅: 현재 작업 디렉토리 확인
     current_dir = os.path.dirname(os.path.abspath(__file__))
     background_image_path = os.path.join(current_dir, "background.jpg")
     
-    # base64 인코딩
+    # base64 인코딩 시도
     bg_image_base64 = get_base64_image(background_image_path)
     
     if bg_image_base64:
+        st.sidebar.success("✅ 배경 이미지 로드 성공!")
         # 배경 이미지가 있을 때
         page_bg_css = f"""
         <style>
@@ -153,6 +230,7 @@ def show_login_page():
         """
         st.markdown(page_bg_css, unsafe_allow_html=True)
     else:
+        st.sidebar.error("❌ 배경 이미지 로드 실패 - 기본 배경 사용")
         # 배경 이미지가 없을 때 기본 스타일
         st.markdown("""
         <style>
@@ -192,15 +270,13 @@ def show_login_page():
         # ✅ 상단 여백
         st.markdown("<div style='height: 100px;'></div>", unsafe_allow_html=True)
         
-        # ✅ 중앙 정렬된 컨테이너
+        # ✅ 중앙 정렬된 컨테이너 삭제한다
         col1, col2, col3 = st.columns([1, 2, 1])
         
         with col2:
             st.markdown("""
             <div style='text-align: center; margin-bottom: 20px;'>
-                <h1 style='color: white; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);'>
-                    🏫 저현고 학술제
-                </h1>
+            
             </div>
             """, unsafe_allow_html=True)
         
@@ -219,7 +295,7 @@ def show_login_page():
                             padding: 15px 30px;
                             font-size: 18px;
                             font-weight: bold;
-                            background: #87CEEB;
+                            background: #7e9af5;
                             color: white;
                             border: none;
                             border-radius: 25px;
@@ -230,7 +306,7 @@ def show_login_page():
                         "
                         onmouseover="this.style.background='#6CB4D9'; this.style.transform='translateY(-2px)'"
                         onmouseout="this.style.background='#87CEEB'; this.style.transform='translateY(0)'">
-                    🚪 Google 로그인
+                     Google 로그인
                 </button>
             </div>
             <script>
@@ -240,15 +316,6 @@ def show_login_page():
             </script>
             """
             html(login_button_html, height=80)
-
-        # 수동 로그인 옵션 (하단에 작게)
-        with st.expander("🛠️ 문제 발생 시 수동 로그인"):
-            manual_token = st.text_area("토큰을 여기에 붙여넣으세요", height=80)
-            if st.button("🔐 수동 로그인", use_container_width=True):
-                if manual_token.strip():
-                    handle_login_callback(manual_token.strip())
-                else:
-                    st.warning("토큰을 입력해주세요.")
 
         auth_js = f"""
         <script>
@@ -382,7 +449,7 @@ def show_manager_features(token, user_info):
                         st.balloons()
                         st.info("💡 이 계정에는 더 이상 스탬프를 부여할 수 없습니다.")
                     else:
-                        error_msg = response.json().get('message', '처리 실패') if response else '서버 연결 실패'
+                        error_msg = response.json().get('message', '처리 실패') if response else '이 계정에는 더이상 스탬프를 부여할 수 없습니다.'
                         st.error(f"❌ {error_msg}")
 
 def show_admin_features(token, user_info):
@@ -392,6 +459,102 @@ def show_admin_features(token, user_info):
         response = make_flask_request('/api/users', 'GET', token=token)
         if response and response.status_code == 200:
             st.session_state.admin_users = response.json().get('users', [])
+
+# 🔴🔴🔴 새로운 위험한 기능: 모든 스탬프 기록 초기화
+    st.divider()
+    st.subheader("🚨 위험: 모든 스탬프 기록 초기화")
+    
+    st.warning("""
+    ⚠️ **위험한 작업 경고**
+    
+    이 기능은 **모든 사용자의 스탬프 적립 기록과 stamp_grants 기록을 완전히 초기화**합니다.
+    
+    **초기화되는 내용:**
+    1. 모든 사용자의 stamps 필드 (적립된 스탬프 기록)
+    2. 모든 stamp_grants 문서 (스탬프 부여 이력)
+    
+    **주의사항:**
+    - 이 작업은 **되돌릴 수 없습니다**
+    - 초기화 후에는 모든 사용자의 스탬프가 0으로 리셋됩니다
+    - 학술제 종료 후 데이터 정리 시에만 사용하세요
+    - 실행 전 반드시 확인 문구를 정확히 입력해야 합니다
+    """)
+    
+    # 확인을 위한 안전장치
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        confirmation_text = st.text_input(
+            "확인을 위해 '모든 스탬프 기록 초기화'를 정확히 입력하세요",
+            placeholder="정확한 문구를 입력해야 합니다",
+            key="reset_confirmation"
+        )
+    
+    with col2:
+        st.write("")  # 공간 맞추기
+        st.write("")
+        reset_button = st.button(
+            "🚨 모든 기록 초기화",
+            type="secondary",
+            disabled=(confirmation_text != "모든 스탬프 기록 초기화"),
+            use_container_width=True,
+            key="reset_all_stamps"
+        )
+    
+    if reset_button:
+        if confirmation_text == "모든 스탬프 기록 초기화":
+            # 최종 확인
+            with st.expander("🔎 초기화 대상 확인", expanded=True):
+                st.error("""
+                **최종 확인 필요**
+                
+                정말로 모든 스탬프 기록을 초기화하시겠습니까?
+                
+                초기화 후에는 다음 작업이 필요합니다:
+                1. 모든 사용자는 스탬프를 처음부터 다시 적립해야 함
+                2. 모든 부장/관리자는 스탬프를 다시 부여해야 함
+                3. stamp_grants 이력이 모두 삭제됨
+                """)
+                
+                final_check = st.checkbox("네, 모든 기록을 초기화하는 것에 동의합니다")
+                
+                if final_check:
+                    with st.spinner("모든 스탬프 기록 초기화 중... 이 작업은 몇 초가 소요될 수 있습니다."):
+                        # Flask 서버의 reset-all-stamps 엔드포인트 호출
+                        response = make_flask_request('/api/reset-all-stamps', 'POST', {}, token)
+                        
+                        if response and response.status_code == 200:
+                            data = response.json()
+                            st.success(f"✅ {data.get('message')}")
+                            
+                            # 초기화 후 사용자 목록 새로고침
+                            response = make_flask_request('/api/users', 'GET', token=token)
+                            if response and response.status_code == 200:
+                                st.session_state.admin_users = response.json().get('users', [])
+                            
+                            # 성공 메시지 표시
+                            st.balloons()
+                            st.info("""
+                            **초기화 완료**
+                            
+                            모든 스탬프 기록이 초기화되었습니다.
+                            - 모든 사용자의 스탬프: 0개
+                            - 모든 stamp_grants 기록: 삭제됨
+                            
+                            이제 새로운 스탬프 적립이 가능합니다.
+                            """)
+                            
+                            # 페이지 새로고침
+                            st.rerun()
+                        else:
+                            error_msg = response.json().get('message', '초기화 실패') if response else '서버 연결 실패'
+                            st.error(f"❌ 초기화 실패: {error_msg}")
+                else:
+                    st.info("최종 확인 체크박스를 선택해야 초기화가 진행됩니다.")
+        else:
+            st.error("❌ 확인 문구가 정확하지 않습니다.")
+    
+    st.divider()
     
     st.subheader("👥 사용자 관리")
     
@@ -515,10 +678,14 @@ def show_admin_features(token, user_info):
 def show_main_page():
     token = st.session_state.auth_token
     user_info = st.session_state.user_info
+
+    # 최상단 배너 표시 (타이틀보다 위에 두고 싶으면 이 줄을 맨 처음에 호출)
+    show_top_banner("banner.jpg", max_height=180, link=None)
+
     
     col1, col2 = st.columns([4, 1])
     with col1:
-        st.title(f"👋 {user_info['display_name']}님, 환영합니다!")
+        st.title(f" {user_info['display_name']}님, 환영합니다!")
         stamp_count = sum(1 for stamp, has_stamp in user_info.get('stamps', {}).items() if has_stamp)
         total_stamps = len(STAMP_IDS)
         st.write(f"**역할:** {user_info['role']} | **스탬프:** {stamp_count}/{total_stamps}")
@@ -541,23 +708,24 @@ def show_main_page():
     # ✅ 3개의 버튼으로 변경
     col_btn1, col_btn2, col_btn3 = st.columns(3)
     
-    with col_btn1:
-        if st.button("📚 학술발표\n참여 동아리", use_container_width=True, key="presentation_btn"):
-            st.session_state.show_presentation_clubs = not st.session_state.show_presentation_clubs
-            st.session_state.show_exhibition_activities = False
-            st.session_state.show_academic_web = False
     
-    with col_btn2:
+    with col_btn1:
         if st.button("🎨 전시 및\n체험 활동", use_container_width=True, key="exhibition_btn"):
             st.session_state.show_exhibition_activities = not st.session_state.show_exhibition_activities
             st.session_state.show_presentation_clubs = False
             st.session_state.show_academic_web = False
             
-    with col_btn3:
-        if st.button("🌐 학술제 웹", use_container_width=True, key="academic_web_btn"):
+    with col_btn2:
+        if st.button("🌐 학술제 맵", use_container_width=True, key="academic_web_btn"):
             st.session_state.show_academic_web = not st.session_state.show_academic_web
             st.session_state.show_presentation_clubs = False
             st.session_state.show_exhibition_activities = False
+
+    with col_btn3:
+        if st.button("📚 학술발표\n참여 동아리", use_container_width=True, key="presentation_btn"):
+            st.session_state.show_presentation_clubs = not st.session_state.show_presentation_clubs
+            st.session_state.show_exhibition_activities = False
+            st.session_state.show_academic_web = False
     
     # ✅ 각 버튼에 대응하는 콘텐츠 표시
     if st.session_state.get('show_presentation_clubs', False):
@@ -567,7 +735,7 @@ def show_main_page():
         show_image_section("🎨 전시 및 체험 활동", "exhibition_activities")
         
     if st.session_state.get('show_academic_web', False):
-        show_image_section("🌐 학술제 웹", "academic_web")
+        show_image_section("🌐 학술제 맵", "academic_web")
     
     st.divider()
     
@@ -584,8 +752,7 @@ def main():
     st.set_page_config(
         page_title="저현고 학술제", 
         page_icon="🏫", 
-        layout="wide",
-        initial_sidebar_state="collapsed"
+        layout="wide", # 디버깅을 위해 사이드바 열기
     )
     
     if 'auth_token' not in st.session_state:
