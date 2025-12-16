@@ -137,9 +137,9 @@ def show_image_section(title, image_key):
         st.info("🖼️ 이미지가 곧 업데이트될 예정입니다.")
 
 # --- 아래 유틸 함수들 아래 어딘가에 추가 ---
-def show_top_banner(image_filename="src/banner.jpg", max_height=220, link=None):
+def show_top_banner(image_filename="banner.jpg", max_height=220, link=None):
     """
-    최상단 배너 표시 (모바일 최적화)
+    최상단 배너 표시 - 화면 전체 너비로 표시 (모바일 최적화)
     - image_filename: 파일명 (예: "banner.jpg")
     - max_height: 배너 최대 높이(px)
     - link: 배너 클릭 시 열릴 외부 링크 (없으면 단순 이미지)
@@ -152,39 +152,52 @@ def show_top_banner(image_filename="src/banner.jpg", max_height=220, link=None):
         st.warning(f"배너 이미지가 없습니다: {image_filename}")
         return
 
-    # 모바일에서 전체 너비를 차지하도록 수정
-    link_start = f'<a href="{link}" target="_blank" style="display:block; width:100%;">' if link else ''
+    link_start = f'<a href="{link}" target="_blank" style="display:block;">' if link else ''
     link_end = '</a>' if link else ''
 
     banner_html = f"""
     <style>
-    /* 배너 컨테이너 스타일 */
-    .banner-container {{
-        width: 100%;
-        margin: 0;
-        padding: 0;
-        margin-bottom: 18px;
+    /* ✅ Streamlit 기본 padding 제거 - 전체 너비 확보 */
+    .main .block-container {{
+        padding-top: 0 !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        max-width: 100% !important;
     }}
     
-    /* 배너 이미지 스타일 */
+    /* 배너 컨테이너 - 화면 전체 너비 */
+    .banner-container {{
+        width: 100vw;
+        margin-left: calc(-50vw + 50%);
+        margin-right: calc(-50vw + 50%);
+        margin-top: -1rem;
+        margin-bottom: 2rem;
+        padding: 0;
+    }}
+    
+    /* 배너 이미지 */
     .banner-image {{
         width: 100%;
-        max-height: {max_height}px;
+        height: {max_height}px;
         object-fit: cover;
-        border-radius: 10px;
-        box-shadow: 0 6px 18px rgba(0,0,0,0.12);
         display: block;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }}
     
     /* 모바일 최적화 */
     @media (max-width: 768px) {{
         .banner-image {{
-            border-radius: 0;  /* 모바일에서 모서리 둥글기 제거 */
-            max-height: 180px;  /* 모바일에서 높이 조정 */
+            height: 150px;
         }}
         .banner-container {{
-            margin-bottom: 12px;
+            margin-bottom: 1rem;
         }}
+    }}
+    
+    /* 배너 아래 컨텐츠 padding 복구 */
+    .content-after-banner {{
+        padding-left: 1rem;
+        padding-right: 1rem;
     }}
     </style>
     <div class="banner-container">
@@ -195,6 +208,7 @@ def show_top_banner(image_filename="src/banner.jpg", max_height=220, link=None):
       />
       {link_end}
     </div>
+    <div class="content-after-banner">
     """
     st.markdown(banner_html, unsafe_allow_html=True)
 
